@@ -1,0 +1,37 @@
+name: Daily Stock Checker
+
+on:
+  schedule:
+    # 平日（月〜金）の日本時間 15:35 (UTC 06:35) に自動起動
+    - cron: '35 6 * * 1-5'
+  workflow_dispatch: # ボタンを押して手動で即時テスト実行も可能にする
+
+permissions:
+  contents: write # 結果ファイル(result.json)を保存する権限
+
+jobs:
+  run-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python環境をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 必要なライブラリをインストール
+        run: |
+          pip install yfinance pytz pandas numpy
+
+      - name: 相場流判定スクリプトを実行
+        run: |
+          python check_signals.py
+
+      - name: 判定結果(result.json)をGitHubに保存
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add result.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update result.json [skip ci]" && git push)
