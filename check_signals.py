@@ -7,7 +7,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# 監視対象銘柄と保有状況
+# 監視対象銘柄と保有状況（Colab完全準拠）
 PORTFOLIO = {
     "6758.T": {"name": "ソニーG",   "holding": True},   # 保有中
     "7012.T": {"name": "川崎重工", "holding": False},  # 監視中
