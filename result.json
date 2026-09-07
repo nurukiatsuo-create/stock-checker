@@ -1,10 +1,10 @@
 {
-  "updated_at": "09/07 06:35 JST",
+  "updated_at": "09/07 15:54 JST",
   "top_stock": {
     "code": "6758",
     "name": "ソニーG",
-    "price": "3,885円",
-    "bias": "+1.3%",
+    "price": "3,780円",
+    "bias": "-1.5%",
     "status": "★成行売り決済",
     "badge": "EXIT",
     "priority": 1,
@@ -14,8 +14,8 @@
     {
       "code": "6758",
       "name": "ソニーG",
-      "price": "3,885円",
-      "bias": "+1.3%",
+      "price": "3,780円",
+      "bias": "-1.5%",
       "status": "★成行売り決済",
       "badge": "EXIT",
       "priority": 1,
@@ -24,9 +24,9 @@
     {
       "code": "8306",
       "name": "三菱UFJ",
-      "price": "3,785円",
-      "bias": "+4.7%",
-      "status": "見送り(高値圏)",
+      "price": "3,711円",
+      "bias": "+2.4%",
+      "status": "押し目待ち",
       "badge": "WAIT",
       "priority": 3,
       "holding": false
@@ -34,9 +34,9 @@
     {
       "code": "9107",
       "name": "川崎汽船",
-      "price": "3,328円",
-      "bias": "+3.7%",
-      "status": "押し目待ち",
+      "price": "3,425円",
+      "bias": "+5.8%",
+      "status": "見送り(高値圏)",
       "badge": "WAIT",
       "priority": 3,
       "holding": false
@@ -44,8 +44,8 @@
     {
       "code": "7012",
       "name": "川崎重工",
-      "price": "2,433円",
-      "bias": "-8.2%",
+      "price": "2,488円",
+      "bias": "-5.6%",
       "status": "待機(手出し無用)",
       "badge": "NONE",
       "priority": 5,
@@ -54,8 +54,8 @@
     {
       "code": "7011",
       "name": "三菱重工",
-      "price": "3,754円",
-      "bias": "-6.5%",
+      "price": "3,829円",
+      "bias": "-4.4%",
       "status": "待機(手出し無用)",
       "badge": "NONE",
       "priority": 5,
