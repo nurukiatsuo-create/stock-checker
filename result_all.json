@@ -1,36 +1,36 @@
 {
-  "updated_at": "09/08 15:54",
+  "updated_at": "09/09 15:53",
   "swing": [
     {
       "code": "7012",
       "name": "川崎重工",
-      "price": "2,385円",
-      "sig_val": "-9.0%",
-      "status": "▼手じまい警告",
-      "badge": "EXIT"
+      "price": "2,418円",
+      "sig_val": "-7.1%",
+      "status": "手出し無用",
+      "badge": "NONE"
     },
     {
       "code": "7011",
       "name": "三菱重工",
-      "price": "3,708円",
-      "sig_val": "-7.1%",
-      "status": "▼手じまい警告",
-      "badge": "EXIT"
+      "price": "3,813円",
+      "sig_val": "-4.1%",
+      "status": "手出し無用",
+      "badge": "NONE"
     },
     {
       "code": "8306",
       "name": "三菱UFJ",
-      "price": "3,656円",
-      "sig_val": "+0.7%",
-      "status": "▼手じまい警告",
-      "badge": "EXIT"
+      "price": "3,601円",
+      "sig_val": "-0.8%",
+      "status": "手出し無用",
+      "badge": "NONE"
     }
   ],
   "value": [
     {
       "code": "5446",
       "name": "北越メタル",
-      "price": "1,090円",
+      "price": "1,095円",
       "sig_val": "PBR 0.24倍",
       "status": "底練り中(待機)",
       "badge": "WAIT"
@@ -38,23 +38,23 @@
     {
       "code": "5923",
       "name": "高田機工",
-      "price": "1,172円",
-      "sig_val": "PBR 0.47倍",
+      "price": "1,186円",
+      "sig_val": "PBR 0.48倍",
       "status": "★週足底打ち反転",
       "badge": "BUY"
     },
     {
       "code": "5928",
       "name": "アルメタックス",
-      "price": "288円",
-      "sig_val": "PBR 0.43倍",
+      "price": "290円",
+      "sig_val": "PBR 0.44倍",
       "status": "★週足底打ち反転",
       "badge": "BUY"
     },
     {
       "code": "6022",
       "name": "赤阪鉄",
-      "price": "2,898円",
+      "price": "2,900円",
       "sig_val": "PBR 0.55倍",
       "status": "★週足底打ち反転",
       "badge": "BUY"
@@ -72,48 +72,48 @@
     {
       "code": "215A",
       "name": "タイミー",
-      "price": "1,592円",
-      "sig_val": "高値比 71.1%",
+      "price": "1,538円",
+      "sig_val": "高値比 70.7%",
       "status": "押し目・様子見",
       "badge": "WAIT"
     },
     {
       "code": "4377",
       "name": "ワンキャリア",
-      "price": "2,279円",
-      "sig_val": "高値比 80.0%",
+      "price": "2,248円",
+      "sig_val": "高値比 78.9%",
       "status": "押し目・様子見",
       "badge": "WAIT"
     },
     {
       "code": "4419",
       "name": "フィナテキスト",
-      "price": "1,385円",
-      "sig_val": "高値比 79.2%",
+      "price": "1,339円",
+      "sig_val": "高値比 76.6%",
       "status": "押し目・様子見",
       "badge": "WAIT"
     },
     {
       "code": "5253",
       "name": "カバー",
-      "price": "1,667円",
-      "sig_val": "高値比 80.8%",
-      "status": "上昇トレンド中",
-      "badge": "BUY"
-    },
-    {
-      "code": "5016",
-      "name": "ＪＸ金属",
-      "price": "3,726円",
-      "sig_val": "高値比 63.9%",
+      "price": "1,601円",
+      "sig_val": "高値比 77.6%",
       "status": "押し目・様子見",
       "badge": "WAIT"
     },
     {
+      "code": "5016",
+      "name": "ＪＸ金属",
+      "price": "3,909円",
+      "sig_val": "高値比 67.1%",
+      "status": "上昇トレンド中",
+      "badge": "BUY"
+    },
+    {
       "code": "6954",
       "name": "ファナック",
-      "price": "5,797円",
-      "sig_val": "高値比 65.3%",
+      "price": "5,848円",
+      "sig_val": "高値比 65.9%",
       "status": "押し目・様子見",
       "badge": "WAIT"
     }
