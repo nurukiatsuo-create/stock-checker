@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # 監視対象銘柄と保有状況（Colab完全準拠）
 PORTFOLIO = {
-    "6758.T": {"name": "ソニーG",   "holding": True},   # 保有中
+    "6758.T": {"name": "ソニーG",   "holding": False},  # 監視中
     "7012.T": {"name": "川崎重工", "holding": False},  # 監視中
     "8306.T": {"name": "三菱UFJ",  "holding": False},  # 監視中
     "7011.T": {"name": "三菱重工", "holding": False},  # 監視中
