@@ -1,26 +1,16 @@
 {
-  "updated_at": "09/09 15:52 JST",
+  "updated_at": "09/10 07:51 JST",
   "top_stock": {
-    "code": "6758",
-    "name": "ソニーG",
-    "price": "3,625円",
-    "bias": "-5.3%",
-    "status": "★成行売り決済",
-    "badge": "EXIT",
-    "priority": 1,
-    "holding": true
+    "code": "9107",
+    "name": "川崎汽船",
+    "price": "3,348円",
+    "bias": "+1.8%",
+    "status": "押し目待ち",
+    "badge": "WAIT",
+    "priority": 3,
+    "holding": false
   },
   "stocks": [
-    {
-      "code": "6758",
-      "name": "ソニーG",
-      "price": "3,625円",
-      "bias": "-5.3%",
-      "status": "★成行売り決済",
-      "badge": "EXIT",
-      "priority": 1,
-      "holding": true
-    },
     {
       "code": "9107",
       "name": "川崎汽船",
@@ -29,6 +19,16 @@
       "status": "押し目待ち",
       "badge": "WAIT",
       "priority": 3,
+      "holding": false
+    },
+    {
+      "code": "6758",
+      "name": "ソニーG",
+      "price": "3,625円",
+      "bias": "-5.3%",
+      "status": "待機(手出し無用)",
+      "badge": "NONE",
+      "priority": 5,
       "holding": false
     },
     {
