@@ -1,174 +1,304 @@
-import json
 from datetime import datetime
+import json
+import os
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytz
 import yfinance as yf
 
-# 監視ユニバース定義
+# ==========================================
+# 1. 設定 & ポートフォリオ管理
+# ==========================================
+JST = pytz.timezone("Asia/Tokyo")
+
+# 監視対象ユニバース
 UNIVERSE = {
-    # 1. 相場流スイング（大型株）
     "swing": {
+        "8306.T": "三菱UFJ",
         "7012.T": "川崎重工",
         "7011.T": "三菱重工",
-        "8306.T": "三菱UFJ"
-    },
-    # 2. シクリカルバリュー（景気循環・割安）
-    "value": {
-        "5386.T": "鶴弥",
-        "5446.T": "北越メタル",
-        "5923.T": "高田機工",
-        "5928.T": "アルメタックス",
-        "6022.T": "赤阪鉄",
-        "8144.T": "電響社"
-    },
-    # 3. 成長株・フィジカルAI
-    "growth": {
-        "215A.T": "タイミー",
-        "4377.T": "ワンキャリア",
-        "4419.T": "フィナテキスト",
-        "5253.T": "カバー",
-        "5016.T": "ＪＸ金属",
-        "6954.T": "ファナック"
+        "9107.T": "川崎汽船",
+        "6758.T": "ソニーG",
     }
 }
 
-def analyze_swing(df):
-    for p in [5, 20, 100]:
-        df[f"SMA_{p}"] = df["Close"].rolling(window=p, min_periods=1).mean()
-        df[f"Slope_{p}"] = df[f"SMA_{p}"].diff().fillna(0)
-    df["Body_Center"] = (df["Open"] + df["Close"]) / 2
-    df["Is_Yang"] = df["Close"] >= df["Open"]
-    df["Is_Yin"] = df["Close"] < df["Open"]
-    df["Bias_20"] = ((df["Close"] - df["SMA_20"]) / df["SMA_20"]) * 100
-    
-    latest = df.iloc[-1]
-    sub_ppp = (latest["SMA_5"] > latest["SMA_20"]) and (latest["Slope_20"] > 0)
-    above_100 = (latest["Close"] > latest["SMA_100"])
-    bias_ok = (latest["Bias_20"] <= 4.0)
-    kahanshin = (latest["Slope_5"] >= 0) and latest["Is_Yang"] and (latest["Body_Center"] > latest["SMA_5"])
-    buy_signal = sub_ppp and above_100 and bias_ok and kahanshin
-    exit_signal = latest["Is_Yin"] and (latest["Body_Center"] < latest["SMA_5"])
-    
-    bias_val = f"{latest['Bias_20']:+.1f}%" if pd.notnull(latest['Bias_20']) else "-"
-    if buy_signal:
-        return {"text": "★買いシグナル", "badge": "BUY", "val": bias_val}
-    elif exit_signal:
-        return {"text": "▼手じまい警告", "badge": "EXIT", "val": bias_val}
-    elif sub_ppp and (latest["Bias_20"] > 4.0):
-        return {"text": "高値圏(待機)", "badge": "WAIT", "val": bias_val}
-    elif sub_ppp:
-        return {"text": "押し目待ち", "badge": "WAIT", "val": bias_val}
-    else:
-        return {"text": "手出し無用", "badge": "NONE", "val": bias_val}
-
-def analyze_value(df, ticker):
-    try:
-        df_w = df.resample('W').last().dropna(subset=['Close'])
-        for p in [13, 26]:
-            df_w[f"SMA_W{p}"] = df_w["Close"].rolling(window=min(p, len(df_w)), min_periods=1).mean()
-        latest_w = df_w.iloc[-1]
-        prev_w = df_w.iloc[-2] if len(df_w) > 1 else latest_w
-        bottoming = (latest_w["Close"] >= latest_w.get("SMA_W13", 0)) and \
-                    (latest_w.get("SMA_W13", 0) >= prev_w.get("SMA_W13", 0))
-    except Exception:
-        bottoming = False
-
-    pbr_val = None
-    try:
-        info = ticker.info or {}
-        pbr_raw = info.get('priceToBook')
-        if pbr_raw is not None:
-            pbr_val = float(pbr_raw)
-    except Exception:
-        pass
-
-    pbr_str = f"PBR {pbr_val:.2f}倍" if pbr_val is not None else "PBR -"
-
-    if pbr_val is not None and pbr_val <= 0.8:
-        if bottoming:
-            return {"text": "★週足底打ち反転", "badge": "BUY", "val": pbr_str}
-        else:
-            return {"text": "底練り中(待機)", "badge": "WAIT", "val": pbr_str}
-    else:
-        if bottoming:
-            return {"text": "週足反転の兆し", "badge": "WATCH", "val": pbr_str}
-        return {"text": "様子見", "badge": "NONE", "val": pbr_str}
-
-def analyze_growth(df):
-    for p in [50, 200]:
-        df[f"SMA_{p}"] = df["Close"].rolling(window=min(p, len(df)), min_periods=1).mean()
-    df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
-    df["Volume_SMA5"] = df["Volume"].rolling(window=min(5, len(df)), min_periods=1).mean()
-    
-    window_high = min(250, len(df))
-    high_n = df["High"].tail(window_high).max()
-    latest = df.iloc[-1]
-    
-    trend_up = (latest["SMA_50"] >= latest["SMA_200"]) if "SMA_200" in latest else True
-    is_near_high = (latest["Close"] / high_n >= 0.95) if (high_n and high_n > 0) else False
-    is_volume_up = (latest["Volume"] > latest["Volume_SMA5"] * 1.3) if latest["Volume_SMA5"] > 0 else False
-    
-    high_str = f"高値比 {latest['Close']/high_n*100:.1f}%" if (high_n and high_n > 0) else "-"
-    
-    if trend_up and is_near_high and is_volume_up:
-        return {"text": "★新高値ブレイク", "badge": "BUY", "val": high_str}
-    elif trend_up and (latest["Close"] >= latest["EMA_20"]):
-        return {"text": "上昇トレンド中", "badge": "BUY", "val": high_str}
-    else:
-        return {"text": "押し目・様子見", "badge": "WAIT", "val": high_str}
-
-def analyze_market_all():
-    jst = pytz.timezone("Asia/Tokyo")
-    now_jst = datetime.now(jst)
-    all_results = {
-        "updated_at": now_jst.strftime("%m/%d %H:%M"),
-        "swing": [],
-        "value": [],
-        "growth": []
+# 保有ポジション設定（約定値・損切りライン）
+HOLDINGS = {
+    "8306": {
+        "side": "BUY",
+        "entry_price": 3661.0,  # 本日の約定価格
+        "stop_loss": 3570.0,  # 本日安値割れ（撤退ライン）
+        "target_profit": 3780.0,  # 直近高値圏ターゲット
     }
-    
-    print(f"[{all_results['updated_at']}] ポートフォリオ解析を開始します...")
+}
 
-    for category, stocks in UNIVERSE.items():
-        print(f"\n--- カテゴリー: {category} ---")
-        category_results = []
-        for code, meta_name in stocks.items():
-            try:
-                ticker = yf.Ticker(code)
-                df = ticker.history(period="1y")
-                if df.empty or len(df) < 5:
-                    print(f"スキップ: {code} ({meta_name}) - データ不足")
-                    continue
-                
-                price_val = int(df.iloc[-1]['Close'])
-                price_str = f"{price_val:,}円"
-                
-                if category == "swing":
-                    sig = analyze_swing(df)
-                elif category == "value":
-                    sig = analyze_value(df, ticker)
-                elif category == "growth":
-                    sig = analyze_growth(df)
-                
-                category_results.append({
-                    "code": code.replace(".T", ""),
-                    "name": meta_name,
-                    "price": price_str,
-                    "sig_val": sig["val"],
-                    "status": sig["text"],
-                    "badge": sig["badge"]
-                })
-                print(f"完了: {code} ({meta_name}) -> {sig['text']} ({sig['badge']})")
-            except Exception as e:
-                print(f"エラー発生 {code} ({meta_name}): {e}")
-        
-        all_results[category] = category_results
 
-    with open("result_all.json", "w", encoding="utf-8") as f:
-        json.dump(all_results, f, ensure_ascii=False, indent=2)
-    
-    print("\nresult_all.json を正常に生成しました。")
+# ==========================================
+# 2. 相場流判定ロジック
+# ==========================================
+def evaluate_stock(df, code_clean):
+    curr = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    c_open, c_close, c_high, c_low = (
+        curr["Open"],
+        curr["Close"],
+        curr["High"],
+        curr["Low"],
+    )
+    p_open, p_close = prev["Open"], prev["Close"]
+
+    ma5 = curr["MA5"]
+    ma20 = curr["MA20"]
+    ma60 = curr["MA60"]
+    p_ma5 = prev["MA5"]
+
+    bias_20 = ((c_close - ma20) / ma20) * 100
+    bias_str = f"{bias_20:+.1f}%"
+
+    candle_body_mid = (c_open + c_close) / 2.0
+    is_yang = c_close >= c_open
+    is_yin = c_close < c_open
+
+    # 相場流シグナル判定
+    is_shitahanshin = (
+        is_yang
+        and (candle_body_mid > ma5)
+        and (c_close > ma5)
+        and (p_close <= p_ma5 or (p_open + p_close) / 2.0 <= p_ma5)
+    )
+    is_gyaku_shitahanshin = (
+        is_yin and (candle_body_mid < ma5) and (c_close < ma5)
+    )
+    is_monowakare = (c_low <= ma20 * 1.015) and (c_close > ma20) and is_yang
+    is_ppp = (ma5 > ma20) and (ma20 > ma60)
+    is_reverse_ppp = (ma5 < ma20) and (ma20 < ma60)
+
+    # 保有中銘柄の判定
+    if code_clean in HOLDINGS:
+        h = HOLDINGS[code_clean]
+        sl = h["stop_loss"]
+        tp = h["target_profit"]
+        pnl = ((c_close - h["entry_price"]) / h["entry_price"]) * 100
+
+        if c_close <= sl or c_low <= sl:
+            return {
+                "status": "ロスカット撤退",
+                "badge": "EXIT",
+                "bias": bias_str,
+            }
+        elif is_gyaku_shitahanshin:
+            return {
+                "status": "手仕舞い(逆下半身)",
+                "badge": "EXIT",
+                "bias": bias_str,
+            }
+        elif c_close >= tp:
+            return {
+                "status": "利確目安到達",
+                "badge": "EXIT",
+                "bias": bias_str,
+            }
+        else:
+            return {
+                "status": f"継続保有({pnl:+.1f}%)",
+                "badge": "HOLD",
+                "bias": bias_str,
+            }
+
+    # 未保有銘柄の判定
+    if is_shitahanshin and is_monowakare:
+        return {
+            "status": "下半身+ものわかれ(買)",
+            "badge": "BUY",
+            "bias": bias_str,
+        }
+    elif is_shitahanshin:
+        return {"status": "下半身(打診買)", "badge": "BUY", "bias": bias_str}
+    elif is_monowakare:
+        return {"status": "ものわかれ初動", "badge": "BUY", "bias": bias_str}
+    elif is_reverse_ppp:
+        return {"status": "待機(手出し無用)", "badge": "NONE", "bias": bias_str}
+    elif is_ppp:
+        if c_close > ma5:
+            return {"status": "押し目待ち", "badge": "WAIT", "bias": bias_str}
+        else:
+            return {
+                "status": "調整中(押し目監視)",
+                "badge": "WAIT",
+                "bias": bias_str,
+            }
+    return {"status": "保ち合い(様子見)", "badge": "NONE", "bias": bias_str}
+
+
+# ==========================================
+# 3. ウィジェット用ダークテーマチャート生成
+# ==========================================
+def draw_chart(df, code_clean, stock_name, status_text):
+    plot_df = df.tail(35).copy()
+    fig, ax = plt.subplots(figsize=(6.5, 3.2), facecolor="#161618")
+    ax.set_facecolor("#161618")
+
+    # 移動平均線
+    dates = [mdates.date2num(d) for d in plot_df.index]
+    ax.plot(
+        dates,
+        plot_df["MA5"],
+        color="#30d158",
+        linewidth=1.2,
+        label="5MA",
+        alpha=0.9,
+    )
+    ax.plot(
+        dates,
+        plot_df["MA20"],
+        color="#ff9f0a",
+        linewidth=1.4,
+        label="20MA",
+        alpha=0.9,
+    )
+    ax.plot(
+        dates,
+        plot_df["MA60"],
+        color="#64d2ff",
+        linewidth=1.2,
+        label="60MA",
+        alpha=0.8,
+    )
+
+    # ローソク足描画
+    width = 0.55
+    for i, (idx, row) in enumerate(plot_df.iterrows()):
+        d = dates[i]
+        o, c, h, l = row["Open"], row["Close"], row["High"], row["Low"]
+        color = "#ff453a" if c >= o else "#0a84ff"  # 日本株仕様：陽線=赤, 陰線=青
+        ax.plot([d, d], [l, h], color=color, linewidth=1.0)
+        ax.bar(
+            d,
+            abs(c - o),
+            bottom=min(o, c),
+            width=width,
+            color=color,
+            edgecolor=color,
+            linewidth=0.5,
+        )
+
+    # 相場流シグナルマーカー
+    for i in range(1, len(plot_df)):
+        curr_row = plot_df.iloc[i]
+        prev_row = plot_df.iloc[i - 1]
+        d = dates[i]
+        mid = (curr_row["Open"] + curr_row["Close"]) / 2.0
+        # 下半身シグナル（上向き三角）
+        if (
+            curr_row["Close"] >= curr_row["Open"]
+            and mid > curr_row["MA5"]
+            and prev_row["Close"] <= prev_row["MA5"]
+        ):
+            ax.scatter(
+                d,
+                curr_row["Low"] * 0.992,
+                color="#ffd60a",
+                marker="^",
+                s=40,
+                zorder=5,
+            )
+        # 逆下半身シグナル（下向き三角）
+        elif (
+            curr_row["Close"] < curr_row["Open"]
+            and mid < curr_row["MA5"]
+            and prev_row["Close"] >= prev_row["MA5"]
+        ):
+            ax.scatter(
+                d,
+                curr_row["High"] * 1.008,
+                color="#64d2ff",
+                marker="v",
+                s=40,
+                zorder=5,
+            )
+
+    # 軸・グリッド設定
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
+    ax.tick_params(colors="#8e8e93", labelsize=8)
+    ax.grid(True, linestyle="--", linewidth=0.5, color="#2c2c2e", alpha=0.7)
+    for spine in ax.spines.values():
+        spine.set_color("#2c2c2e")
+
+    plt.tight_layout()
+    fig.savefig(
+        f"chart_{code_clean}.png",
+        dpi=150,
+        bbox_inches="tight",
+        facecolor="#161618",
+    )
+    if code_clean == "8306":
+        fig.savefig(
+            "chart.png", dpi=150, bbox_inches="tight", facecolor="#161618"
+        )
+    plt.close(fig)
+
+
+# ==========================================
+# 4. メイン処理（実行 & 出力）
+# ==========================================
+def main():
+    now_jst = datetime.now(JST).strftime("%m/%d %H:%M JST")
+    stock_results = []
+    swing_universe = UNIVERSE["swing"]
+
+    for symbol, name in swing_universe.items():
+        code_clean = symbol.replace(".T", "")
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="6mo")
+
+        if df.empty or len(df) < 60:
+            continue
+
+        # 移動平均線の算出
+        df["MA5"] = df["Close"].rolling(5).mean()
+        df["MA20"] = df["Close"].rolling(20).mean()
+        df["MA60"] = df["Close"].rolling(60).mean()
+
+        # 判定
+        res = evaluate_stock(df, code_clean)
+        c_price = df.iloc[-1]["Close"]
+        price_str = (
+            f"{c_price:,.1f}円" if c_price < 1000 else f"{int(c_price):,}円"
+        )
+
+        stock_results.append(
+            {
+                "code": code_clean,
+                "name": name,
+                "price": price_str,
+                "bias": res["bias"],
+                "status": res["status"],
+                "badge": res["badge"],
+            }
+        )
+
+        # チャート画像を出力
+        draw_chart(df, code_clean, name, res["status"])
+
+    # 三菱UFJを優先してトップに配置
+    top_stock = next(
+        (s for s in stock_results if s["code"] == "8306"), stock_results[0]
+    )
+
+    output_data = {
+        "updated_at": now_jst,
+        "top_stock": top_stock,
+        "stocks": stock_results,
+    }
+
+    with open("result.json", "w", encoding="utf-8") as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+    print(f"[{now_jst}] 更新完了: 三菱UFJステータス -> {top_stock['status']}")
+
 
 if __name__ == "__main__":
-    analyze_market_all()
-
+    main()
