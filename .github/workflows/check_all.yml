@@ -36,6 +36,3 @@ jobs:
           if git diff --staged --quiet; then
             echo "変更はありませんでした。"
           else
-            git commit -m "Update all portfolio results [skip ci]"
-            git push
-          fi
