@@ -1,12 +1,12 @@
 {
-  "updated_at": "09/12 20:58 JST",
+  "updated_at": "09/13 08:30 JST",
   "top_stock": {
-    "code": "9107",
-    "name": "川崎汽船",
-    "price": "3,397円",
-    "bias": "+2.1%",
-    "status": "ものわかれ初動",
-    "badge": "BUY"
+    "code": "8306",
+    "name": "三菱UFJ",
+    "price": "3,661円",
+    "bias": "+1.0%",
+    "status": "継続保有(+0.0%)",
+    "badge": "HOLD"
   },
   "stocks": [
     {
@@ -30,7 +30,7 @@
       "name": "スズキ",
       "price": "2,047円",
       "bias": "-2.4%",
-      "status": "待機(手出し無用)",
+      "status": "下落トレンド(待機)",
       "badge": "NONE"
     },
     {
@@ -38,7 +38,7 @@
       "name": "三菱重工",
       "price": "3,705円",
       "bias": "-5.5%",
-      "status": "待機(手出し無用)",
+      "status": "下落トレンド(待機)",
       "badge": "NONE"
     },
     {
@@ -46,7 +46,7 @@
       "name": "川崎重工",
       "price": "2,319円",
       "bias": "-9.2%",
-      "status": "待機(手出し無用)",
+      "status": "下落トレンド(待機)",
       "badge": "NONE"
     },
     {
@@ -54,16 +54,16 @@
       "name": "川崎汽船",
       "price": "3,397円",
       "bias": "+2.1%",
-      "status": "ものわかれ初動",
-      "badge": "BUY"
+      "status": "ものわかれ(反発待)",
+      "badge": "WAIT"
     },
     {
       "code": "8002",
       "name": "丸紅",
       "price": "5,049円",
       "bias": "+1.1%",
-      "status": "ものわかれ初動",
-      "badge": "BUY"
+      "status": "ものわかれ(反発待)",
+      "badge": "WAIT"
     }
   ]
 }
