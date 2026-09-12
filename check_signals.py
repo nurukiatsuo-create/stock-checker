@@ -13,7 +13,6 @@ import yfinance as yf
 # ==========================================
 JST = pytz.timezone("Asia/Tokyo")
 
-# 監視対象ユニバース
 UNIVERSE = {
     "swing": {
         "8306.T": "三菱UFJ",
@@ -24,19 +23,18 @@ UNIVERSE = {
     }
 }
 
-# 保有ポジション設定（約定値・損切りライン）
 HOLDINGS = {
     "8306": {
         "side": "BUY",
-        "entry_price": 3661.0,  # 本日の約定価格
-        "stop_loss": 3570.0,  # 本日安値割れ（撤退ライン）
-        "target_profit": 3780.0,  # 直近高値圏ターゲット
+        "entry_price": 3661.0,
+        "stop_loss": 3570.0,
+        "target_profit": 3780.0,
     }
 }
 
 
 # ==========================================
-# 2. 相場流判定ロジック
+# 2. 相場流判定ロジック（2本線＋傾き判定）
 # ==========================================
 def evaluate_stock(df, code_clean):
     curr = df.iloc[-1]
@@ -52,8 +50,13 @@ def evaluate_stock(df, code_clean):
 
     ma5 = curr["MA5"]
     ma20 = curr["MA20"]
-    ma60 = curr["MA60"]
     p_ma5 = prev["MA5"]
+    p_ma20 = prev["MA20"]
+
+    # 5日線（赤）の傾き（横ばい〜上向き）
+    is_ma5_up_or_flat = ma5 >= p_ma5
+    # 20日線（青）の傾き
+    is_ma20_up = ma20 >= p_ma20
 
     bias_20 = ((c_close - ma20) / ma20) * 100
     bias_str = f"{bias_20:+.1f}%"
@@ -68,15 +71,19 @@ def evaluate_stock(df, code_clean):
         and (candle_body_mid > ma5)
         and (c_close > ma5)
         and (p_close <= p_ma5 or (p_open + p_close) / 2.0 <= p_ma5)
+        and is_ma5_up_or_flat
     )
     is_gyaku_shitahanshin = (
         is_yin and (candle_body_mid < ma5) and (c_close < ma5)
     )
-    is_monowakare = (c_low <= ma20 * 1.015) and (c_close > ma20) and is_yang
-    is_ppp = (ma5 > ma20) and (ma20 > ma60)
-    is_reverse_ppp = (ma5 < ma20) and (ma20 < ma60)
+    is_monowakare = (
+        (c_low <= ma20 * 1.015) and (c_close > ma20) and is_yang and is_ma20_up
+    )
 
-    # 保有中銘柄の判定
+    is_trend_up = (ma5 > ma20) and is_ma20_up
+    is_trend_down = (ma5 < ma20) and (not is_ma20_up)
+
+    # 保有銘柄判定
     if code_clean in HOLDINGS:
         h = HOLDINGS[code_clean]
         sl = h["stop_loss"]
@@ -108,7 +115,7 @@ def evaluate_stock(df, code_clean):
                 "bias": bias_str,
             }
 
-    # 未保有銘柄の判定
+    # 監視銘柄判定
     if is_shitahanshin and is_monowakare:
         return {
             "status": "下半身+ものわかれ(買)",
@@ -119,9 +126,9 @@ def evaluate_stock(df, code_clean):
         return {"status": "下半身(打診買)", "badge": "BUY", "bias": bias_str}
     elif is_monowakare:
         return {"status": "ものわかれ初動", "badge": "BUY", "bias": bias_str}
-    elif is_reverse_ppp:
+    elif is_trend_down:
         return {"status": "待機(手出し無用)", "badge": "NONE", "bias": bias_str}
-    elif is_ppp:
+    elif is_trend_up:
         if c_close > ma5:
             return {"status": "押し目待ち", "badge": "WAIT", "bias": bias_str}
         else:
@@ -134,46 +141,38 @@ def evaluate_stock(df, code_clean):
 
 
 # ==========================================
-# 3. ウィジェット用ダークテーマチャート生成
+# 3. 2本線チャート生成（赤：5日線、青：20日線）
 # ==========================================
 def draw_chart(df, code_clean, stock_name, status_text):
     plot_df = df.tail(35).copy()
     fig, ax = plt.subplots(figsize=(6.5, 3.2), facecolor="#161618")
     ax.set_facecolor("#161618")
 
-    # 移動平均線
     dates = [mdates.date2num(d) for d in plot_df.index]
+
+    # 5日線＝赤、20日線＝青（60日線は削除）
     ax.plot(
         dates,
         plot_df["MA5"],
-        color="#30d158",
-        linewidth=1.2,
+        color="#ff3b30",
+        linewidth=1.6,
         label="5MA",
-        alpha=0.9,
+        alpha=0.95,
     )
     ax.plot(
         dates,
         plot_df["MA20"],
-        color="#ff9f0a",
-        linewidth=1.4,
+        color="#007aff",
+        linewidth=1.6,
         label="20MA",
-        alpha=0.9,
-    )
-    ax.plot(
-        dates,
-        plot_df["MA60"],
-        color="#64d2ff",
-        linewidth=1.2,
-        label="60MA",
-        alpha=0.8,
+        alpha=0.95,
     )
 
-    # ローソク足描画
     width = 0.55
     for i, (idx, row) in enumerate(plot_df.iterrows()):
         d = dates[i]
         o, c, h, l = row["Open"], row["Close"], row["High"], row["Low"]
-        color = "#ff453a" if c >= o else "#0a84ff"  # 日本株仕様：陽線=赤, 陰線=青
+        color = "#ff453a" if c >= o else "#0a84ff"
         ax.plot([d, d], [l, h], color=color, linewidth=1.0)
         ax.bar(
             d,
@@ -185,27 +184,27 @@ def draw_chart(df, code_clean, stock_name, status_text):
             linewidth=0.5,
         )
 
-    # 相場流シグナルマーカー
     for i in range(1, len(plot_df)):
         curr_row = plot_df.iloc[i]
         prev_row = plot_df.iloc[i - 1]
         d = dates[i]
         mid = (curr_row["Open"] + curr_row["Close"]) / 2.0
-        # 下半身シグナル（上向き三角）
+        is_ma5_up = curr_row["MA5"] >= prev_row["MA5"]
+
         if (
             curr_row["Close"] >= curr_row["Open"]
             and mid > curr_row["MA5"]
             and prev_row["Close"] <= prev_row["MA5"]
+            and is_ma5_up
         ):
             ax.scatter(
                 d,
                 curr_row["Low"] * 0.992,
                 color="#ffd60a",
                 marker="^",
-                s=40,
+                s=45,
                 zorder=5,
             )
-        # 逆下半身シグナル（下向き三角）
         elif (
             curr_row["Close"] < curr_row["Open"]
             and mid < curr_row["MA5"]
@@ -216,11 +215,10 @@ def draw_chart(df, code_clean, stock_name, status_text):
                 curr_row["High"] * 1.008,
                 color="#64d2ff",
                 marker="v",
-                s=40,
+                s=45,
                 zorder=5,
             )
 
-    # 軸・グリッド設定
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
     ax.tick_params(colors="#8e8e93", labelsize=8)
     ax.grid(True, linestyle="--", linewidth=0.5, color="#2c2c2e", alpha=0.7)
@@ -242,7 +240,7 @@ def draw_chart(df, code_clean, stock_name, status_text):
 
 
 # ==========================================
-# 4. メイン処理（実行 & 出力）
+# 4. メイン処理
 # ==========================================
 def main():
     now_jst = datetime.now(JST).strftime("%m/%d %H:%M JST")
@@ -254,15 +252,12 @@ def main():
         ticker = yf.Ticker(symbol)
         df = ticker.history(period="6mo")
 
-        if df.empty or len(df) < 60:
+        if df.empty or len(df) < 30:
             continue
 
-        # 移動平均線の算出
         df["MA5"] = df["Close"].rolling(5).mean()
         df["MA20"] = df["Close"].rolling(20).mean()
-        df["MA60"] = df["Close"].rolling(60).mean()
 
-        # 判定
         res = evaluate_stock(df, code_clean)
         c_price = df.iloc[-1]["Close"]
         price_str = (
@@ -280,10 +275,8 @@ def main():
             }
         )
 
-        # チャート画像を出力
         draw_chart(df, code_clean, name, res["status"])
 
-    # 三菱UFJを優先してトップに配置
     top_stock = next(
         (s for s in stock_results if s["code"] == "8306"), stock_results[0]
     )
