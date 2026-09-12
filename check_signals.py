@@ -9,18 +9,19 @@ import pytz
 import yfinance as yf
 
 # ==========================================
-# 1. 設定 & ポートフォリオ管理
+# 1. 設定 & ポートフォリオ管理（厳選7銘柄）
 # ==========================================
 JST = pytz.timezone("Asia/Tokyo")
 
-# 監視対象ユニバース（相場流ショットガン厳選5銘柄）
 UNIVERSE = {
     "swing": {
         "8306.T": "三菱UFJ",  # 主軸・反発実績49回（保有中）
-        "7011.T": "三菱重工",  # スコア97.5・高ボラティリティ
-        "7012.T": "川崎重工",  # スコア97.0・高ボラティリティ
+        "6326.T": "クボタ",  # スコア1位（98.9点）・周期9.6日
+        "7269.T": "スズキ",  # スコア2位（98.4点）・反発実績40回
+        "7011.T": "三菱重工",  # スコア3位（97.5点）・重工トレンド
+        "7012.T": "川崎重工",  # スコア4位（97.0点）・高ボラティリティ
         "9107.T": "川崎汽船",  # 海運モメンタム（ものわかれ点灯中）
-        "6326.T": "クボタ",  # スコア98.9（第1位）・波の周期性（9.6日）
+        "8002.T": "丸紅",  # 商社トップ（93.2点）・安定周期12日
     }
 }
 
@@ -145,7 +146,7 @@ def evaluate_stock(df, code_clean):
 # ==========================================
 # 3. 2本線チャート生成（赤：5日線、青：20日線）
 # ==========================================
-def draw_chart(df, code_clean, stock_name, status_text):
+def draw_chart(df, code_clean, stock_name, status_text, is_top=False):
     plot_df = df.tail(35).copy()
     fig, ax = plt.subplots(figsize=(6.5, 3.2), facecolor="#161618")
     ax.set_facecolor("#161618")
@@ -234,7 +235,7 @@ def draw_chart(df, code_clean, stock_name, status_text):
         bbox_inches="tight",
         facecolor="#161618",
     )
-    if code_clean == "8306":
+    if is_top:
         fig.savefig(
             "chart.png", dpi=150, bbox_inches="tight", facecolor="#161618"
         )
@@ -247,6 +248,7 @@ def draw_chart(df, code_clean, stock_name, status_text):
 def main():
     now_jst = datetime.now(JST).strftime("%m/%d %H:%M JST")
     stock_results = []
+    stock_dfs = {}
     swing_universe = UNIVERSE["swing"]
 
     for symbol, name in swing_universe.items():
@@ -276,12 +278,17 @@ def main():
                 "badge": res["badge"],
             }
         )
+        stock_dfs[code_clean] = (df, name, res["status"])
 
-        draw_chart(df, code_clean, name, res["status"])
+    # トップ選出優先度：① 買いシグナル(BUY) ② 保有中(8306) ③ 先頭銘柄
+    buy_stock = next((s for s in stock_results if s["badge"] == "BUY"), None)
+    hold_stock = next((s for s in stock_results if s["code"] == "8306"), None)
+    top_stock = buy_stock or hold_stock or stock_results[0]
 
-    top_stock = next(
-        (s for s in stock_results if s["code"] == "8306"), stock_results[0]
-    )
+    # 全チャート描画（トップ銘柄は chart.png としても保存）
+    for code, (df, name, status) in stock_dfs.items():
+        is_top = code == top_stock["code"]
+        draw_chart(df, code, name, status, is_top=is_top)
 
     output_data = {
         "updated_at": now_jst,
@@ -292,7 +299,9 @@ def main():
     with open("result.json", "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
-    print(f"[{now_jst}] 更新完了: 三菱UFJステータス -> {top_stock['status']}")
+    print(
+        f"[{now_jst}] 7銘柄更新完了 | トップ銘柄: {top_stock['name']} ({top_stock['code']}) -> {top_stock['status']}"
+    )
 
 
 if __name__ == "__main__":
