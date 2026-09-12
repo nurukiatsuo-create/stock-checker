@@ -1,5 +1,5 @@
 {
-  "updated_at": "09/12 17:14 JST",
+  "updated_at": "09/12 19:08 JST",
   "top_stock": {
     "code": "8306",
     "name": "三菱UFJ",
@@ -18,18 +18,18 @@
       "badge": "HOLD"
     },
     {
-      "code": "7012",
-      "name": "川崎重工",
-      "price": "2,319円",
-      "bias": "-9.2%",
-      "status": "待機(手出し無用)",
-      "badge": "NONE"
-    },
-    {
       "code": "7011",
       "name": "三菱重工",
       "price": "3,705円",
       "bias": "-5.5%",
+      "status": "待機(手出し無用)",
+      "badge": "NONE"
+    },
+    {
+      "code": "7012",
+      "name": "川崎重工",
+      "price": "2,319円",
+      "bias": "-9.2%",
       "status": "待機(手出し無用)",
       "badge": "NONE"
     },
@@ -42,12 +42,12 @@
       "badge": "BUY"
     },
     {
-      "code": "6758",
-      "name": "ソニーG",
-      "price": "3,632円",
-      "bias": "-4.7%",
-      "status": "待機(手出し無用)",
-      "badge": "NONE"
+      "code": "6326",
+      "name": "クボタ",
+      "price": "2,783円",
+      "bias": "-1.1%",
+      "status": "調整中(押し目監視)",
+      "badge": "WAIT"
     }
   ]
 }
