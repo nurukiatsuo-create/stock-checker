@@ -1,12 +1,14 @@
 {
-  "updated_at": "09/13 08:43 JST",
+  "updated_at": "09/13 09:02 JST",
   "top_stock": {
     "code": "8306",
     "name": "三菱UFJ",
     "price": "3,661円",
     "bias": "+1.0%",
     "status": "継続保有(+0.0%)",
-    "badge": "HOLD"
+    "badge": "HOLD",
+    "is_holding": true,
+    "entry_price": 3661.0
   },
   "stocks": [
     {
@@ -15,7 +17,9 @@
       "price": "3,661円",
       "bias": "+1.0%",
       "status": "継続保有(+0.0%)",
-      "badge": "HOLD"
+      "badge": "HOLD",
+      "is_holding": true,
+      "entry_price": 3661.0
     },
     {
       "code": "6326",
@@ -23,7 +27,9 @@
       "price": "2,783円",
       "bias": "-1.1%",
       "status": "調整中(押し目監視)",
-      "badge": "WAIT"
+      "badge": "WAIT",
+      "is_holding": false,
+      "entry_price": null
     },
     {
       "code": "7269",
@@ -31,7 +37,9 @@
       "price": "2,047円",
       "bias": "-2.4%",
       "status": "下落トレンド(待機)",
-      "badge": "NONE"
+      "badge": "NONE",
+      "is_holding": false,
+      "entry_price": null
     },
     {
       "code": "7011",
@@ -39,7 +47,9 @@
       "price": "3,705円",
       "bias": "-5.5%",
       "status": "下落トレンド(待機)",
-      "badge": "NONE"
+      "badge": "NONE",
+      "is_holding": false,
+      "entry_price": null
     },
     {
       "code": "7012",
@@ -47,7 +57,9 @@
       "price": "2,319円",
       "bias": "-9.2%",
       "status": "下落トレンド(待機)",
-      "badge": "NONE"
+      "badge": "NONE",
+      "is_holding": false,
+      "entry_price": null
     },
     {
       "code": "9107",
@@ -55,7 +67,9 @@
       "price": "3,397円",
       "bias": "+2.1%",
       "status": "ものわかれ(反発待)",
-      "badge": "WAIT"
+      "badge": "WAIT",
+      "is_holding": false,
+      "entry_price": null
     },
     {
       "code": "8002",
@@ -63,7 +77,9 @@
       "price": "5,049円",
       "bias": "+1.1%",
       "status": "ものわかれ(反発待)",
-      "badge": "WAIT"
+      "badge": "WAIT",
+      "is_holding": false,
+      "entry_price": null
     }
   ]
 }
