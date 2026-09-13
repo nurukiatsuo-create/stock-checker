@@ -15,7 +15,7 @@ JST = pytz.timezone("Asia/Tokyo")
 
 UNIVERSE = {
     "swing": {
-        "8306.T": "三菱UFJ",  # 主軸・保有中
+        "8306.T": "三菱UFJ",
         "6326.T": "クボタ",
         "7269.T": "スズキ",
         "7011.T": "三菱重工",
@@ -67,7 +67,6 @@ def evaluate_stock(df, code_clean):
   is_yang = c_close >= c_open
   is_yin = c_close < c_open
 
-  # 基本シグナル判定
   is_shitahanshin = (
       is_yang
       and (candle_body_mid > ma5)
@@ -95,7 +94,7 @@ def evaluate_stock(df, code_clean):
   is_trend_up = (ma5 > ma20) and is_ma20_up
   is_trend_down = (ma5 < ma20) and (not is_ma20_up)
 
-  # A. 保有中銘柄の判定
+  # A. 保有銘柄
   if code_clean in HOLDINGS:
     h = HOLDINGS[code_clean]
     sl = h.get("stop_loss", h["entry_price"] * 0.97)
@@ -119,7 +118,7 @@ def evaluate_stock(df, code_clean):
           "bias": bias_str,
       }
 
-  # B. 監視銘柄の判定（フライング防止＆空売り両対応）
+  # B. 監視銘柄
   if is_shitahanshin and is_monowakare:
     return {"status": "下半身+ものわかれ(買)", "badge": "BUY", "bias": bias_str}
   elif is_shitahanshin:
@@ -148,7 +147,7 @@ def evaluate_stock(df, code_clean):
 
 
 # ==========================================
-# 3. チャート生成（利確・買値・撤退ライン付き）
+# 3. チャート生成（文字拡大・見切れ防止版）
 # ==========================================
 def draw_chart(df, code_clean, stock_name, status_text, is_top=False):
   plot_df = df.tail(35).copy()
@@ -222,51 +221,48 @@ def draw_chart(df, code_clean, stock_name, status_text, is_top=False):
           zorder=5,
       )
 
-  # ★保有中の場合：利確・買値・撤退ラインを描画
+  # ★保有中の場合：利確・買値・撤退ラインを描画（文字サイズ拡大）
   if code_clean in HOLDINGS:
     h = HOLDINGS[code_clean]
     entry = h["entry_price"]
     sl = h.get("stop_loss", entry * 0.97)
     tp = h.get("target_profit", entry * 1.05)
 
-    ax.axhline(
-        tp, color="#af52de", linestyle="--", linewidth=1.2, alpha=0.9
-    )  # 利確（紫）
-    ax.axhline(
-        entry, color="#ffd60a", linestyle=":", linewidth=1.2, alpha=0.9
-    )  # 買値（黄）
-    ax.axhline(
-        sl, color="#ff9500", linestyle="--", linewidth=1.2, alpha=0.9
-    )  # 撤退（橙）
+    ax.axhline(tp, color="#af52de", linestyle="--", linewidth=1.3, alpha=0.9)
+    ax.axhline(entry, color="#ffd60a", linestyle=":", linewidth=1.3, alpha=0.9)
+    ax.axhline(sl, color="#ff9500", linestyle="--", linewidth=1.3, alpha=0.9)
 
     last_d = dates[-1]
     ax.text(
-        last_d,
+        last_d + 0.3,
         tp,
-        f" 利確:{int(tp):,}",
+        f" 利確 {int(tp):,}",
         color="#af52de",
-        fontsize=8,
+        fontsize=11,
         va="bottom",
         fontweight="bold",
     )
     ax.text(
-        last_d,
+        last_d + 0.3,
         entry,
-        f" 買値:{int(entry):,}",
+        f" 買値 {int(entry):,}",
         color="#ffd60a",
-        fontsize=8,
+        fontsize=11,
         va="center",
         fontweight="bold",
     )
     ax.text(
-        last_d,
+        last_d + 0.3,
         sl,
-        f" 撤退:{int(sl):,}",
+        f" 撤退 {int(sl):,}",
         color="#ff9500",
-        fontsize=8,
+        fontsize=11,
         va="top",
         fontweight="bold",
     )
+
+    # 右端の余白を確保して文字欠けを防止
+    ax.set_xlim(dates[0] - 0.5, dates[-1] + 5.5)
 
     y_min = min(plot_df["Low"].min(), sl) * 0.985
     y_max = max(plot_df["High"].max(), tp) * 1.015
@@ -340,7 +336,6 @@ def main():
   hold_stock = next((s for s in stock_results if s["badge"] == "HOLD"), None)
   top_stock = exit_stock or signal_stock or hold_stock or stock_results[0]
 
-  # チャート出力
   for code, (df, name, status) in stock_dfs.items():
     is_top = code == top_stock["code"]
     draw_chart(df, code, name, status, is_top=is_top)
@@ -351,7 +346,6 @@ def main():
       "stocks": stock_results,
   }
 
-  # result.json と result_all.json の両方を出力して完全互換を確保
   with open("result.json", "w", encoding="utf-8") as f:
     json.dump(output_data, f, ensure_ascii=False, indent=2)
   with open("result_all.json", "w", encoding="utf-8") as f:
