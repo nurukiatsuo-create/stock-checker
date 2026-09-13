@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="相場流ボード">
+  <title>【相場流】シグナル判定ダッシュボード</title>
+
+  <style>
+    :root {
+      --bg: #0e0e10;
+      --card-bg: #18181b;
+      --border: #27272a;
+      --text: #f4f4f5;
+      --text-sub: #a1a1aa;
+      --accent: #ffd60a;
+      --up-red: #ff453a;
+      --down-blue: #0a84ff;
+      --hold-green: #30d158;
+      --wait-orange: #ff9f0a;
+      --profit-purple: #bf5af2;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    header {
+      height: 52px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background-color: var(--card-bg);
+      flex-shrink: 0;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .status-tag {
+      font-size: 12px;
+      color: var(--accent);
+      background: rgba(255, 214, 10, 0.12);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .meta-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    .btn-refresh {
+      background: #27272a;
+      border: none;
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      padding: 16px 20px;
+      gap: 20px;
+    }
+
+    .chart-panel {
+      flex: 1.35;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chart-header {
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .chart-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .chart-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: #141416;
+    }
+
+    .chart-body img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+    .list-panel {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .list-header-title {
+      padding: 14px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .table-container {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      font-size: 13px;
+      color: var(--text-sub);
+      font-weight: 600;
+      padding: 12px 16px;
+      background: #18181b;
+      position: sticky;
+      top: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 15px;
+      vertical-align: middle;
+      cursor: pointer;
+    }
+
+    tr:hover, tr.active {
+      background: rgba(255, 214, 10, 0.1);
+    }
+
+    tr.active td.col-name {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .col-price {
+      font-family: "DIN Alternate", "SF Mono", monospace;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      min-width: 52px;
+      color: #fff;
+    }
+
+    .badge-hold { background-color: var(--hold-green); }
+    .badge-buy  { background-color: var(--up-red); }
+    .badge-wait { background-color: var(--wait-orange); }
+    .badge-exit { background-color: var(--profit-purple); }
+    .badge-none { background-color: #27272a; color: #a1a1aa; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-group">
+      <h1>【相場流】シグナル判定</h1>
+      <span class="status-tag">iPad 全画面ダッシュボード</span>
+    </div>
+    <div class="meta-group">
+      <span id="updated-at">データ読み込み中...</span>
+      <button class="btn-refresh" onclick="fetchData()">🔄 更新</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 左：チャート -->
+    <section class="chart-panel">
+      <div class="chart-header">
+        <div class="chart-title" id="current-chart-name">三菱UFJ (8306)</div>
+        <div id="current-chart-badges" style="display: flex; gap: 6px;"></div>
+      </div>
+      <div class="chart-body">
+        <img id="chart-img" src="chart.png" alt="株価チャート">
+      </div>
+    </section>
+
+    <!-- 右：銘柄一覧テーブル -->
+    <section class="list-panel">
+      <div class="list-header-title">監視ポートフォリオ（タップでチャート切替）</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>銘柄</th>
+              <th>現在値</th>
+              <th style="text-align: center;">現物</th>
+              <th style="text-align: center;">信用</th>
+            </tr>
+          </thead>
+          <tbody id="stock-table-body">
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let currentData = null;
+    let selectedCode = "8306";
+
+    async function fetchData() {
+      try {
+        const res = await fetch(`result.json?t=${Date.now()}`);
+        currentData = await res.json();
+        render();
+      } catch (err) {
+        console.error("データ取得失敗:", err);
+      }
+    }
+
+    function render() {
+      if (!currentData) return;
+
+      document.getElementById("updated-at").innerText = "データ日時: " + currentData.updated_at;
+
+      const tbody = document.getElementById("stock-table-body");
+      tbody.innerHTML = "";
+
+      currentData.stocks.forEach(stock => {
+        const tr = document.createElement("tr");
+        if (stock.code === selectedCode) tr.classList.add("active");
+
+        const spotBadge = getSpotBadge(stock);
+        const marginBadge = getMarginBadge(stock);
+
+        tr.innerHTML = `
+          <td class="col-name">${stock.code === selectedCode ? '▶ ' : ''}${stock.name} <span style="font-size:12px; color:#71717a;">${stock.code}</span></td>
+          <td class="col-price">${stock.price.replace("円", "")}</td>
+          <td style="text-align: center;">${spotBadge}</td>
+          <td style="text-align: center;">${marginBadge}</td>
+        `;
+
+        tr.onclick = () => selectStock(stock.code);
+        tbody.appendChild(tr);
+      });
+
+      updateChartArea();
+    }
+
+    function selectStock(code) {
+      selectedCode = code;
+      render();
+    }
+
+    function updateChartArea() {
+      const stock = currentData.stocks.find(s => s.code === selectedCode) || currentData.stocks[0];
+      
+      let headerText = `${stock.name} (${stock.code})`;
+      if (stock.is_holding && stock.entry_price) {
+        headerText += ` <span style="font-size:14px; color:#ffd60a; margin-left:8px;">買値:${Math.round(stock.entry_price).toLocaleString()}</span>`;
+      }
+      document.getElementById("current-chart-name").innerHTML = headerText;
+
+      const badgeArea = document.getElementById("current-chart-badges");
+      badgeArea.innerHTML = getSpotBadge(stock) + getMarginBadge(stock);
+
+      const chartImg = document.getElementById("chart-img");
+      const imgPath = selectedCode === "8306" ? `chart.png?t=${Date.now()}` : `chart_${selectedCode}.png?t=${Date.now()}`;
+      chartImg.src = imgPath;
+    }
+
+    function getSpotBadge(item) {
+      const status = item.status || "";
+      if (status.includes("利確")) return `<span class="badge badge-exit">現利確</span>`;
+      if (status.includes("手仕舞") || status.includes("撤退") || status.includes("損切り")) return `<span class="badge badge-wait">手仕舞</span>`;
+      if (status.includes("継続保有") || status.includes("保有中")) return `<span class="badge badge-hold">保有中</span>`;
+      if (status.includes("下半身")) return `<span class="badge badge-buy">現買</span>`;
+      if (status.includes("ものわかれ") || status.includes("押し目")) return `<span class="badge badge-wait">反発待</span>`;
+      return `<span class="badge badge-none">待機</span>`;
+    }
+
+    function getMarginBadge(item) {
+      const status = item.status || "";
+      if (status.includes("空売保有")) return `<span class="badge badge-hold">空売中</span>`;
+      if (status.includes("返済買") || status.includes("信利確")) return `<span class="badge badge-exit">返済買</span>`;
+      if (status.includes("逆下半身") || status.includes("逆もの") || status.includes("空売")) return `<span class="badge" style="background:#007aff;">空売</span>`;
+      return `<span class="badge badge-none">待機</span>`;
+    }
+
+    fetchData();
+    setInterval(fetchData, 60000);
+  </script>
+</body>
+</html>
