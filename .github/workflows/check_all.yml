@@ -22,17 +22,20 @@ jobs:
 
       - name: 必要なライブラリをインストール
         run: |
-          pip install yfinance pandas pytz
+          pip install yfinance pandas pytz matplotlib
 
       - name: 総合ポートフォリオ判定を実行
         run: |
           python check_all_portfolio.py
 
-      - name: 生成データ(result_all.json)をGitHubに保存
+      - name: 生成データとチャート画像をGitHubに保存
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add result_all.json
+          git add -A
           if git diff --staged --quiet; then
             echo "変更はありませんでした。"
           else
+            git commit -m "Update portfolio results and charts [skip ci]"
+            git push
+          fi
