@@ -1,85 +1,109 @@
 {
-  "updated_at": "09/14 15:55 JST",
-  "top_stock": {
-    "code": "7269",
-    "name": "スズキ",
-    "price": "2,045円",
-    "bias": "-2.4%",
-    "status": "逆ものわかれ(空売)",
-    "badge": "SELL",
-    "is_holding": false,
-    "entry_price": null
-  },
+  "updated_at": "09/14 22:51 JST",
   "stocks": [
     {
       "code": "8306",
       "name": "三菱UFJ",
       "price": "3,720円",
-      "bias": "+2.5%",
-      "status": "継続保有(+1.6%)",
-      "badge": "HOLD",
+      "price_num": 3720.0,
+      "status": "継続保有",
       "is_holding": true,
-      "entry_price": 3661.0
+      "pos_type": "buy",
+      "entry_price": 3661,
+      "pnl_per_share": 59.0,
+      "pnl_rate": 1.61,
+      "chart_file": "chart_8306.png"
     },
     {
       "code": "6326",
       "name": "クボタ",
       "price": "2,773円",
-      "bias": "-1.6%",
-      "status": "保ち合い(様子見)",
-      "badge": "NONE",
+      "price_num": 2773.0,
+      "status": "逆下半身(空売)",
       "is_holding": false,
-      "entry_price": null
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_6326.png"
     },
     {
       "code": "7269",
       "name": "スズキ",
       "price": "2,045円",
-      "bias": "-2.4%",
-      "status": "逆ものわかれ(空売)",
-      "badge": "SELL",
+      "price_num": 2045.0,
+      "status": "待機",
       "is_holding": false,
-      "entry_price": null
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_7269.png"
     },
     {
       "code": "7011",
       "name": "三菱重工",
       "price": "3,761円",
-      "bias": "-3.4%",
-      "status": "下落トレンド(待機)",
-      "badge": "NONE",
+      "price_num": 3761.0,
+      "status": "待機",
       "is_holding": false,
-      "entry_price": null
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_7011.png"
     },
     {
       "code": "7012",
       "name": "川崎重工",
       "price": "2,351円",
-      "bias": "-7.0%",
-      "status": "下落トレンド(待機)",
-      "badge": "NONE",
+      "price_num": 2351.0,
+      "status": "逆下半身(空売)",
       "is_holding": false,
-      "entry_price": null
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_7012.png"
     },
     {
       "code": "9107",
       "name": "川崎汽船",
       "price": "3,429円",
-      "bias": "+2.6%",
-      "status": "下半身(現買確定)",
-      "badge": "BUY",
+      "price_num": 3429.0,
+      "status": "下半身(買)",
       "is_holding": false,
-      "entry_price": null
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_9107.png"
     },
     {
       "code": "8002",
       "name": "丸紅",
       "price": "5,091円",
-      "bias": "+1.7%",
-      "status": "押し目待ち",
-      "badge": "WAIT",
+      "price_num": 5091.0,
+      "status": "待機",
       "is_holding": false,
-      "entry_price": null
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_8002.png"
+    },
+    {
+      "code": "1326",
+      "name": "SPDRゴールド",
+      "price": "61,460円",
+      "price_num": 61460.0,
+      "status": "逆下半身(空売)",
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
+      "chart_file": "chart_1326.png"
     }
   ]
 }
