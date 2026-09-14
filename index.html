@@ -44,8 +44,8 @@
     }
 
     header {
-      height: 52px;
-      padding: 0 24px;
+      height: 48px;
+      padding: 0 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -57,20 +57,20 @@
     .title-group {
       display: flex;
       align-items: baseline;
-      gap: 12px;
+      gap: 10px;
     }
 
     h1 {
-      font-size: 19px;
+      font-size: 17px;
       font-weight: 700;
       letter-spacing: 0.5px;
     }
 
     .status-tag {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--accent);
       background: rgba(255, 214, 10, 0.12);
-      padding: 3px 8px;
+      padding: 2px 6px;
       border-radius: 4px;
       font-weight: 600;
     }
@@ -78,8 +78,8 @@
     .meta-group {
       display: flex;
       align-items: center;
-      gap: 16px;
-      font-size: 13px;
+      gap: 12px;
+      font-size: 12px;
       color: var(--text-sub);
     }
 
@@ -87,9 +87,9 @@
       background: #27272a;
       border: none;
       color: var(--text);
-      padding: 6px 14px;
+      padding: 5px 12px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
     }
 
@@ -97,36 +97,38 @@
       flex: 1;
       display: flex;
       overflow: hidden;
-      padding: 16px 20px;
-      gap: 20px;
+      padding: 12px 16px;
+      gap: 14px;
     }
 
+    /* 左側チャート（幅を広めに確保） */
     .chart-panel {
-      flex: 1.35;
+      flex: 1.4;
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
     .chart-header {
-      padding: 14px 18px;
+      padding: 10px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.02);
+      flex-shrink: 0;
     }
 
     .chart-title {
-      font-size: 17px;
+      font-size: 15px;
       font-weight: 700;
       color: var(--accent);
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
     .chart-body {
@@ -134,33 +136,36 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 12px;
+      padding: 8px;
       background: #141416;
+      overflow: hidden;
     }
 
     .chart-body img {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
-      border-radius: 8px;
+      border-radius: 6px;
     }
 
+    /* 右側リスト */
     .list-panel {
       flex: 1;
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
     .list-header-title {
-      padding: 14px 18px;
-      font-size: 15px;
+      padding: 10px 16px;
+      font-size: 13.5px;
       font-weight: 700;
       border-bottom: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.02);
+      flex-shrink: 0;
     }
 
     .table-container {
@@ -175,22 +180,24 @@
     }
 
     th {
-      font-size: 13px;
+      font-size: 11.5px;
       color: var(--text-sub);
       font-weight: 600;
-      padding: 12px 16px;
+      padding: 10px 10px;
       background: #18181b;
       position: sticky;
       top: 0;
       border-bottom: 1px solid var(--border);
+      white-space: nowrap;
     }
 
     td {
-      padding: 14px 16px;
+      padding: 10px 10px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      font-size: 15px;
+      font-size: 13.5px;
       vertical-align: middle;
       cursor: pointer;
+      white-space: nowrap;
     }
 
     tr:hover, tr.active {
@@ -202,20 +209,26 @@
       font-weight: 700;
     }
 
+    .col-name {
+      white-space: nowrap;
+    }
+
     .col-price {
       font-family: "DIN Alternate", "SF Mono", monospace;
-      font-size: 17px;
+      font-size: 15px;
       font-weight: 700;
+      text-align: right;
+      padding-right: 14px;
     }
 
     .badge {
       display: inline-block;
-      padding: 4px 10px;
+      padding: 3px 6px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 10.5px;
       font-weight: 700;
       text-align: center;
-      min-width: 52px;
+      min-width: 44px;
       color: #fff;
     }
 
@@ -224,6 +237,15 @@
     .badge-wait { background-color: var(--wait-orange); }
     .badge-exit { background-color: var(--profit-purple); }
     .badge-none { background-color: #27272a; color: #a1a1aa; }
+
+    @media (max-height: 500px) and (orientation: landscape) {
+      header { height: 36px; padding: 0 12px; }
+      h1 { font-size: 14px; }
+      .status-tag { display: none; }
+      main { padding: 6px 10px; gap: 8px; }
+      .chart-header { padding: 6px 10px; }
+      td { padding: 6px 8px; font-size: 12px; }
+    }
   </style>
 </head>
 <body>
@@ -234,34 +256,34 @@
       <span class="status-tag">iPad 全画面ダッシュボード</span>
     </div>
     <div class="meta-group">
-      <span id="updated-at">データ読み込み中...</span>
+      <span id="updated-at">読み込み中...</span>
       <button class="btn-refresh" onclick="fetchData()">🔄 更新</button>
     </div>
   </header>
 
   <main>
-    <!-- 左：チャート -->
+    <!-- 左：チャート領域 -->
     <section class="chart-panel">
       <div class="chart-header">
         <div class="chart-title" id="current-chart-name">三菱UFJ (8306)</div>
         <div id="current-chart-badges" style="display: flex; gap: 6px;"></div>
       </div>
       <div class="chart-body">
-        <img id="chart-img" src="chart.png" alt="株価チャート">
+        <img id="chart-img" src="" alt="株価チャート">
       </div>
     </section>
 
     <!-- 右：銘柄一覧テーブル -->
     <section class="list-panel">
-      <div class="list-header-title">監視ポートフォリオ（タップでチャート切替）</div>
+      <div class="list-header-title">監視ポートフォリオ（タップで切替）</div>
       <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th>銘柄</th>
-              <th>現在値</th>
-              <th style="text-align: center;">現物</th>
-              <th style="text-align: center;">信用</th>
+              <th style="width: 40%;">銘柄</th>
+              <th style="width: 26%; text-align: right; padding-right: 14px;">現在値</th>
+              <th style="width: 17%; text-align: center;">現物</th>
+              <th style="width: 17%; text-align: center;">信用</th>
             </tr>
           </thead>
           <tbody id="stock-table-body">
@@ -288,7 +310,7 @@
     function render() {
       if (!currentData) return;
 
-      document.getElementById("updated-at").innerText = "データ日時: " + currentData.updated_at;
+      document.getElementById("updated-at").innerText = currentData.updated_at;
 
       const tbody = document.getElementById("stock-table-body");
       tbody.innerHTML = "";
@@ -301,7 +323,7 @@
         const marginBadge = getMarginBadge(stock);
 
         tr.innerHTML = `
-          <td class="col-name">${stock.code === selectedCode ? '▶ ' : ''}${stock.name} <span style="font-size:12px; color:#71717a;">${stock.code}</span></td>
+          <td class="col-name">${stock.code === selectedCode ? '▶ ' : ''}${stock.name} <span style="font-size:11px; color:#71717a;">${stock.code}</span></td>
           <td class="col-price">${stock.price.replace("円", "")}</td>
           <td style="text-align: center;">${spotBadge}</td>
           <td style="text-align: center;">${marginBadge}</td>
@@ -324,16 +346,16 @@
       
       let headerText = `${stock.name} (${stock.code})`;
       if (stock.is_holding && stock.entry_price) {
-        headerText += ` <span style="font-size:14px; color:#ffd60a; margin-left:8px;">買値:${Math.round(stock.entry_price).toLocaleString()}</span>`;
+        headerText += ` <span style="font-size:12px; color:#ffd60a; margin-left:6px;">買:${Math.round(stock.entry_price).toLocaleString()}</span>`;
       }
       document.getElementById("current-chart-name").innerHTML = headerText;
 
       const badgeArea = document.getElementById("current-chart-badges");
       badgeArea.innerHTML = getSpotBadge(stock) + getMarginBadge(stock);
 
+      // ★ 各銘柄専用の画像（chart_8306.png など）を直接読み込むよう修正
       const chartImg = document.getElementById("chart-img");
-      const imgPath = selectedCode === "8306" ? `chart.png?t=${Date.now()}` : `chart_${selectedCode}.png?t=${Date.now()}`;
-      chartImg.src = imgPath;
+      chartImg.src = `chart_${selectedCode}.png?t=${Date.now()}`;
     }
 
     function getSpotBadge(item) {
