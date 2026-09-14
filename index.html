@@ -103,7 +103,7 @@
 
     /* 左側チャート（幅を広めに確保） */
     .chart-panel {
-      flex: 1.4;
+      flex: 1.45;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -148,7 +148,7 @@
       border-radius: 6px;
     }
 
-    /* 右側リスト */
+    /* 右側リスト（文字の折り返しを防止） */
     .list-panel {
       flex: 1;
       background: var(--card-bg);
@@ -183,7 +183,7 @@
       font-size: 11.5px;
       color: var(--text-sub);
       font-weight: 600;
-      padding: 10px 10px;
+      padding: 10px 8px;
       background: #18181b;
       position: sticky;
       top: 0;
@@ -192,9 +192,9 @@
     }
 
     td {
-      padding: 10px 10px;
+      padding: 10px 8px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      font-size: 13.5px;
+      font-size: 13px;
       vertical-align: middle;
       cursor: pointer;
       white-space: nowrap;
@@ -218,7 +218,7 @@
       font-size: 15px;
       font-weight: 700;
       text-align: right;
-      padding-right: 14px;
+      padding-right: 8px;
     }
 
     .badge {
@@ -237,15 +237,6 @@
     .badge-wait { background-color: var(--wait-orange); }
     .badge-exit { background-color: var(--profit-purple); }
     .badge-none { background-color: #27272a; color: #a1a1aa; }
-
-    @media (max-height: 500px) and (orientation: landscape) {
-      header { height: 36px; padding: 0 12px; }
-      h1 { font-size: 14px; }
-      .status-tag { display: none; }
-      main { padding: 6px 10px; gap: 8px; }
-      .chart-header { padding: 6px 10px; }
-      td { padding: 6px 8px; font-size: 12px; }
-    }
   </style>
 </head>
 <body>
@@ -280,10 +271,10 @@
         <table>
           <thead>
             <tr>
-              <th style="width: 40%;">銘柄</th>
-              <th style="width: 26%; text-align: right; padding-right: 14px;">現在値</th>
-              <th style="width: 17%; text-align: center;">現物</th>
-              <th style="width: 17%; text-align: center;">信用</th>
+              <th style="width: 42%;">銘柄</th>
+              <th style="width: 26%; text-align: right; padding-right: 8px;">現在値</th>
+              <th style="width: 16%; text-align: center;">現物</th>
+              <th style="width: 16%; text-align: center;">信用</th>
             </tr>
           </thead>
           <tbody id="stock-table-body">
@@ -353,8 +344,12 @@
       const badgeArea = document.getElementById("current-chart-badges");
       badgeArea.innerHTML = getSpotBadge(stock) + getMarginBadge(stock);
 
-      // ★ 各銘柄専用の画像（chart_8306.png など）を直接読み込むよう修正
+      // ★ 必ずその銘柄の画像（chart_8306.png等）を直接読み込み、失敗時はchart.pngをフォールバック表示
       const chartImg = document.getElementById("chart-img");
+      chartImg.onerror = function() {
+        this.onerror = null;
+        this.src = `chart.png?t=${Date.now()}`;
+      };
       chartImg.src = `chart_${selectedCode}.png?t=${Date.now()}`;
     }
 
