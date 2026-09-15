@@ -15,7 +15,6 @@ import mplfinance as mpf
 # ==========================================
 HOLDINGS = {
     "8306": {"entry_price": 3661, "type": "buy", "shares": 100},   # 三菱UFJ（買）
-    # 空売りの例: "7269": {"entry_price": 2050, "type": "sell", "shares": 100},
 }
 
 WATCH_LIST = [
@@ -36,21 +35,17 @@ def analyze_stock(ticker_code, name):
         if df.empty:
             return None
 
-        # yfinanceのマルチインデックス列をフラット化
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # 欠損値（NaN）が含まれる行を確実に除去
         df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy()
         if len(df) < 25:
             return None
 
-        # 必要な列を確実に1次元シリーズとして取得
         close = df['Close'].squeeze()
         df['SMA5'] = close.rolling(window=5).mean()
         df['SMA20'] = close.rolling(window=20).mean()
 
-        # 移動平均線計算後のNaN行も除去
         valid_df = df.dropna(subset=['SMA5', 'SMA20']).copy()
         if len(valid_df) < 5:
             return None
@@ -70,7 +65,6 @@ def analyze_stock(ticker_code, name):
         pnl_per_share = None
         pnl_rate = None
 
-        # --- 損益計算 ---
         if is_holding and entry_price:
             if pos_type == "buy":
                 pnl_per_share = round(curr_close - entry_price, 2)
@@ -79,7 +73,6 @@ def analyze_stock(ticker_code, name):
                 pnl_per_share = round(entry_price - curr_close, 2)
                 pnl_rate = round((pnl_per_share / entry_price) * 100, 2)
 
-        # --- 相場流シグナル判定 ---
         recent_high = float(valid_close.tail(20).max())
         recent_low = float(valid_close.tail(20).min())
 
@@ -114,7 +107,6 @@ def analyze_stock(ticker_code, name):
             elif abs(curr_close - sma20_curr) / sma20_curr < 0.015:
                 status = "反発待"
 
-        # --- チャート描画 ---
         plot_df = valid_df.tail(40).copy()
         mc = mpf.make_marketcolors(up='#ff453a', down='#0a84ff', edge='inherit', wick='inherit', volume='in')
         s = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#27272a', facecolor='#141416')
@@ -165,15 +157,16 @@ def main():
         if data:
             results.append(data)
 
+    # 日本時間 (JST: UTC+9) で現在時刻を記録
+    jst = datetime.timezone(datetime.timedelta(hours=9))
     output = {
-        "updated_at": datetime.datetime.now().strftime("%m/%d %H:%M JST"),
+        "updated_at": datetime.datetime.now(jst).strftime("%m/%d %H:%M JST"),
         "stocks": results
     }
 
     with open("result.json", "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    # 従来の chart.png も生成（三菱UFJを優先コピー）
     if os.path.exists("chart_8306.png"):
         shutil.copy("chart_8306.png", "chart.png")
     elif results and os.path.exists(results[0]["chart_file"]):
