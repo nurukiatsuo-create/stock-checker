@@ -1,5 +1,5 @@
 {
-  "updated_at": "09/15 15:45 JST",
+  "updated_at": "09/16 08:38 JST",
   "stocks": [
     {
       "code": "8306",
@@ -95,8 +95,8 @@
     {
       "code": "1326",
       "name": "SPDRゴールド",
-      "price": "60,860円",
-      "price_num": 60860.0,
+      "price": "61,210円",
+      "price_num": 61210.0,
       "status": "逆下半身(空売)",
       "is_holding": false,
       "pos_type": null,
