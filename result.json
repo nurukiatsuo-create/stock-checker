@@ -1,17 +1,17 @@
 {
-  "updated_at": "09/17 08:39 JST",
+  "updated_at": "09/17 08:44 JST",
   "stocks": [
     {
       "code": "8306",
       "name": "三菱UFJ",
       "price": "3,655円",
       "price_num": 3655.0,
-      "status": "手仕舞",
-      "is_holding": true,
-      "pos_type": "buy",
-      "entry_price": 3661,
-      "pnl_per_share": -6.0,
-      "pnl_rate": -0.16,
+      "status": "反発待",
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null,
+      "pnl_per_share": null,
+      "pnl_rate": null,
       "chart_file": "chart_8306.png"
     },
     {
@@ -71,12 +71,12 @@
       "name": "川崎汽船",
       "price": "3,460円",
       "price_num": 3460.0,
-      "status": "下半身(買)",
-      "is_holding": false,
-      "pos_type": null,
-      "entry_price": null,
-      "pnl_per_share": null,
-      "pnl_rate": null,
+      "status": "高値警戒",
+      "is_holding": true,
+      "pos_type": "buy",
+      "entry_price": 3661,
+      "pnl_per_share": -201.0,
+      "pnl_rate": -5.49,
       "chart_file": "chart_9107.png"
     },
     {
