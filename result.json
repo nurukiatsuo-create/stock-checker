@@ -1,5 +1,5 @@
 {
-  "updated_at": "09/17 08:44 JST",
+  "updated_at": "09/17 08:52 JST",
   "stocks": [
     {
       "code": "8306",
@@ -74,9 +74,9 @@
       "status": "高値警戒",
       "is_holding": true,
       "pos_type": "buy",
-      "entry_price": 3661,
-      "pnl_per_share": -201.0,
-      "pnl_rate": -5.49,
+      "entry_price": 3474.4,
+      "pnl_per_share": -14.4,
+      "pnl_rate": -0.41,
       "chart_file": "chart_9107.png"
     },
     {
