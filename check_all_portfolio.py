@@ -14,7 +14,7 @@ import mplfinance as mpf
 # 1. 監視・保有銘柄設定
 # ==========================================
 HOLDINGS = {
-    "9107": {"entry_price": 3474.40, "type": "buy", "shares": 100},   # 三菱UFJ（買）
+    "9107": {"entry_price": 3498.20, "type": "buy", "shares": 200},   # 三菱UFJ（買）
 }
 
 WATCH_LIST = [
