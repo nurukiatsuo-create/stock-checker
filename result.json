@@ -1,65 +1,31 @@
 {
-  "updated_at": "09/21 19:21 JST",
+  "updated_at": "09/21 19:32 JST",
   "top_stock": {
-    "code": "7269",
-    "name": "スズキ",
-    "price": "2,028円",
-    "raw_price": 2028.0,
-    "bias": "-2.8%",
-    "status": "様子見",
-    "badge": "NONE",
-    "score": 0
+    "code": "9107",
+    "name": "川崎汽船",
+    "price": "3,497円",
+    "raw_price": 3497.0,
+    "bias": "+3.0%",
+    "status": "手仕舞(利確指値)",
+    "badge": "EXIT",
+    "score": 0,
+    "is_holding": true,
+    "pos_type": "buy",
+    "entry_price": 3500.4
   },
   "stocks": [
-    {
-      "code": "7269",
-      "name": "スズキ",
-      "price": "2,028円",
-      "raw_price": 2028.0,
-      "bias": "-2.8%",
-      "status": "様子見",
-      "badge": "NONE",
-      "score": 0
-    },
-    {
-      "code": "7012",
-      "name": "川崎重工",
-      "price": "2,404円",
-      "raw_price": 2404.5,
-      "bias": "-2.5%",
-      "status": "様子見",
-      "badge": "NONE",
-      "score": 0
-    },
-    {
-      "code": "6326",
-      "name": "クボタ",
-      "price": "2,749円",
-      "raw_price": 2749.5,
-      "bias": "-3.5%",
-      "status": "様子見",
-      "badge": "NONE",
-      "score": 0
-    },
     {
       "code": "9107",
       "name": "川崎汽船",
       "price": "3,497円",
       "raw_price": 3497.0,
       "bias": "+3.0%",
-      "status": "保有継続(-0.1%/日柄2本)",
-      "badge": "HOLD",
-      "score": 0
-    },
-    {
-      "code": "8306",
-      "name": "三菱UFJ",
-      "price": "3,620円",
-      "raw_price": 3620.0,
-      "bias": "-0.9%",
-      "status": "様子見",
-      "badge": "NONE",
-      "score": 0
+      "status": "手仕舞(利確指値)",
+      "badge": "EXIT",
+      "score": 0,
+      "is_holding": true,
+      "pos_type": "buy",
+      "entry_price": 3500.4
     },
     {
       "code": "7011",
@@ -67,9 +33,25 @@
       "price": "3,879円",
       "raw_price": 3879.0,
       "bias": "+1.3%",
-      "status": "保有継続(-0.3%/日柄1本)",
-      "badge": "HOLD",
-      "score": 0
+      "status": "手仕舞(利確指値)",
+      "badge": "EXIT",
+      "score": 0,
+      "is_holding": true,
+      "pos_type": "buy",
+      "entry_price": 3891.4
+    },
+    {
+      "code": "7269",
+      "name": "スズキ",
+      "price": "2,028円",
+      "raw_price": 2028.0,
+      "bias": "-2.8%",
+      "status": "下降トレンド(空売)",
+      "badge": "SHORT",
+      "score": 49,
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null
     },
     {
       "code": "8002",
@@ -77,9 +59,51 @@
       "price": "4,976円",
       "raw_price": 4976.0,
       "bias": "-1.0%",
-      "status": "様子見",
+      "status": "待機",
       "badge": "NONE",
-      "score": 0
+      "score": 8,
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null
+    },
+    {
+      "code": "6326",
+      "name": "クボタ",
+      "price": "2,749円",
+      "raw_price": 2749.5,
+      "bias": "-3.5%",
+      "status": "待機",
+      "badge": "NONE",
+      "score": 7,
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null
+    },
+    {
+      "code": "7012",
+      "name": "川崎重工",
+      "price": "2,404円",
+      "raw_price": 2404.5,
+      "bias": "-2.5%",
+      "status": "待機",
+      "badge": "NONE",
+      "score": 4,
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null
+    },
+    {
+      "code": "8306",
+      "name": "三菱UFJ",
+      "price": "3,620円",
+      "raw_price": 3620.0,
+      "bias": "-0.9%",
+      "status": "待機",
+      "badge": "NONE",
+      "score": 3,
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null
     }
   ]
 }
