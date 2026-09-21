@@ -1,6 +1,11 @@
 from datetime import datetime
 import json
 import os
+import matplotlib
+
+matplotlib.use("Agg")  # GitHub Actions等のCUI環境で描画するためのヘッドレス設定
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytz
@@ -9,7 +14,7 @@ import yfinance as yf
 JST = pytz.timezone("Asia/Tokyo")
 
 # ==========================================
-# 監視対象銘柄リスト（相場流スイング枠）
+# 1. 監視対象銘柄リスト（相場流スイング枠）
 # ==========================================
 UNIVERSE = {
     "8306.T": "三菱UFJ",
@@ -22,10 +27,11 @@ UNIVERSE = {
 }
 
 # ==========================================
-# 現在の保有ポジション管理
+# 2. 現在の保有ポジション管理
 # ==========================================
 HOLDINGS = {
     "9107": {
+        "name": "川崎汽船",
         "side": "BUY",
         "entry_price": 3500.40,
         "shares": 200,
@@ -34,6 +40,7 @@ HOLDINGS = {
         "entry_date": "2026-09-17",
     },
     "7011": {
+        "name": "三菱重工",
         "side": "BUY",
         "entry_price": 3891.40,
         "shares": 100,
@@ -45,7 +52,7 @@ HOLDINGS = {
 
 
 # ==========================================
-# 評価・スコアリング判定ロジック
+# 3. 判定 & スコアリングエンジン
 # ==========================================
 def evaluate_stock(df, code_clean):
     curr = df.iloc[-1]
@@ -75,7 +82,7 @@ def evaluate_stock(df, code_clean):
     is_yang = c_close >= c_open
     is_yin = c_close < c_open
 
-    # 相場流：基本シグナル判定
+    # 相場流：シグナル判定
     is_shitahanshin = (
         is_yang
         and (candle_body_mid > ma5)
@@ -97,12 +104,18 @@ def evaluate_stock(df, code_clean):
     )
 
     # ----------------------------------------------------
-    # 1. 保有銘柄のエグジット判定（優先処理）
+    # A. 保有銘柄のエグジット判定（優先処理）
     # ----------------------------------------------------
     if code_clean in HOLDINGS:
         h = HOLDINGS[code_clean]
         side = h.get("side", "BUY")
-        entry_date = pd.to_datetime(h.get("entry_date", df.index[-1]))
+
+        # タイムゾーン不整合を防止した安全な日付比較
+        raw_date = h.get("entry_date", df.index[-1])
+        entry_date = pd.to_datetime(raw_date)
+        if entry_date.tzinfo is not None:
+            entry_date = entry_date.tz_localize(None)
+
         candles_since_entry = int(len(df[df.index >= entry_date]))
 
         if side == "BUY":
@@ -145,11 +158,10 @@ def evaluate_stock(df, code_clean):
                 }
 
     # ----------------------------------------------------
-    # 2. 未保有銘柄のスコアリングロジック
+    # B. 未保有銘柄の優先度スコアリング
     # ----------------------------------------------------
     score = 0
 
-    # 【基本点】
     if is_shitahanshin and is_monowakare:
         score += 80
         status = "下半身+ものわかれ(強買)"
@@ -169,19 +181,18 @@ def evaluate_stock(df, code_clean):
     else:
         return {"status": "様子見", "badge": "NONE", "bias": bias_str, "score": 0}
 
-    # 【加点1：20日線の傾き（トレンドの向き）】最大+20点
+    # 【加点1】20日線の傾き（トレンドの勢い）最大+20点
     if badge == "BUY" and is_ma20_up:
         score += min(max(int(ma20_slope * 20), 0), 20)
     elif badge == "SHORT" and is_ma20_down:
         score += min(max(int(abs(ma20_slope) * 20), 0), 20)
 
-    # 【加点2：実体比率（ローソク足の推進力）】最大+10点
-    high_low_range = c_high - c_low
-    body_range = abs(c_close - c_open)
-    body_ratio = (body_range / high_low_range) if high_low_range > 0 else 0.0
+    # 【加点2】ローソク足の実体比率（推進力）最大+10点
+    hl_range = c_high - c_low
+    body_ratio = (abs(c_close - c_open) / hl_range) if hl_range > 0 else 0.0
     score += int(body_ratio * 10)
 
-    # 【減点：過熱感（20日線乖離率 8%超）】-15点
+    # 【減点】過熱感（20日線乖離率 8%超）
     if abs(bias_20) > 8.0:
         score -= 15
 
@@ -194,11 +205,83 @@ def evaluate_stock(df, code_clean):
 
 
 # ==========================================
-# メイン処理（データ取得・ソート・JSON保存）
+# 4. チャート画像生成（Scriptableウィジェット用）
+# ==========================================
+def generate_chart(df, name, code, output_path="chart.png"):
+    plot_df = df.tail(40).copy()  # 直近40日分を描画
+
+    fig, ax = plt.subplots(figsize=(6, 3.2), facecolor="#141414")
+    ax.set_facecolor("#141414")
+
+    # グリッド線
+    ax.grid(True, linestyle=":", alpha=0.3, color="#555555")
+
+    # 移動平均線
+    ax.plot(
+        plot_df.index,
+        plot_df["MA5"],
+        color="#ff4444",
+        linewidth=1.8,
+        label="5MA",
+        alpha=0.9,
+    )
+    ax.plot(
+        plot_df.index,
+        plot_df["MA20"],
+        color="#3399ff",
+        linewidth=1.8,
+        label="20MA",
+        alpha=0.9,
+    )
+
+    # ローソク足の描画
+    width = 0.6
+    for idx, row in plot_df.iterrows():
+        o, c, h, l = row["Open"], row["Close"], row["High"], row["Low"]
+        color = "#ff4444" if c >= o else "#3399ff"
+
+        # ヒゲ
+        ax.vlines(idx, l, h, color=color, linewidth=1.0, alpha=0.8)
+        # 実体
+        lower = min(o, c)
+        height = abs(c - o)
+        if height == 0:
+            height = 0.5
+        ax.bar(
+            idx,
+            height,
+            bottom=lower,
+            color=color,
+            width=width,
+            align="center",
+            alpha=0.9,
+        )
+
+    # 直近高値ライン（黄色破線）
+    recent_high = plot_df["High"].max()
+    ax.axhline(
+        recent_high, color="#f1c40f", linestyle="--", linewidth=1.0, alpha=0.7
+    )
+
+    # 軸設定
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+    ax.tick_params(colors="#888888", labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color("#444444")
+
+    plt.title(f"{name} ({code})", color="#ffffff", fontsize=11, pad=8)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=200, facecolor=fig.get_facecolor())
+    plt.close()
+
+
+# ==========================================
+# 5. メイン処理
 # ==========================================
 def main():
     now_jst = datetime.now(JST).strftime("%m/%d %H:%M JST")
     stock_results = []
+    chart_targets = {}
 
     for symbol, name in UNIVERSE.items():
         code_clean = symbol.replace(".T", "")
@@ -206,11 +289,15 @@ def main():
             ticker = yf.Ticker(symbol)
             df = ticker.history(period="6mo")
         except Exception as e:
-            print(f"データ取得エラー ({symbol}): {e}")
+            print(f"取得エラー ({symbol}): {e}")
             continue
 
         if df.empty or len(df) < 25:
             continue
+
+        # --- タイムゾーンエラーの根本解消処理 ---
+        if df.index.tz is not None:
+            df.index = df.index.tz_convert(JST).tz_localize(None)
 
         # 移動平均線
         df["MA5"] = df["Close"].rolling(5).mean()
@@ -234,9 +321,10 @@ def main():
                 "score": res["score"],
             }
         )
+        chart_targets[code_clean] = (df, name)
 
     # ----------------------------------------------------
-    # 並び替え：シグナル成立(BUY/SHORT)を上位に、スコア降順でソート
+    # 並び替え（シグナル点灯を上位、スコア降順）
     # ----------------------------------------------------
     stock_results.sort(
         key=lambda x: (
@@ -249,20 +337,26 @@ def main():
 
     top_stock = stock_results[0] if stock_results else None
 
+    # チャート画像の出力（最優先銘柄、または保有銘柄を描画）
+    if top_stock and top_stock["code"] in chart_targets:
+        df_top, name_top = chart_targets[top_stock["code"]]
+        generate_chart(df_top, name_top, top_stock["code"], "chart.png")
+        print(f"チャート生成完了: chart.png -> {name_top}")
+
+    # JSON書き出し
     output_data = {
         "updated_at": now_jst,
         "top_stock": top_stock,
         "stocks": stock_results,
     }
 
-    output_path = "result.json"
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open("result.json", "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
-    print(f"[{now_jst}] 判定完了 -> result.json を出力しました。")
+    print(f"[{now_jst}] 処理完了 -> result.json 出力完了")
     if top_stock:
         print(
-            f"★ 最優先銘柄: {top_stock['name']} ({top_stock['code']}) | 判定: {top_stock['status']} | スコア: {top_stock['score']}点"
+            f"★ 最優先銘柄: {top_stock['name']} ({top_stock['code']}) | 状態: {top_stock['status']} | スコア: {top_stock['score']}点"
         )
 
 
