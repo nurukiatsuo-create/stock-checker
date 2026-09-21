@@ -16,7 +16,6 @@
       --short-blue: #0a84ff;
       --ma5-red: #ff3b30;
       --ma20-blue: #0a84ff;
-      --hold-green: #30d158;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,7 +60,7 @@
       width: 100%;
       border-collapse: collapse;
       text-align: left;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
     }
 
     th {
@@ -86,7 +85,7 @@
       display: inline-block;
       padding: 3px 8px;
       border-radius: 4px;
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       font-weight: 700;
       text-align: center;
     }
@@ -95,7 +94,7 @@
     .badge-short { background-color: var(--short-blue); color: #fff; }
 
     .score-high { color: var(--buy-red); font-weight: 700; }
-    .score-mid { color: var(--accent-yellow); }
+    .score-mid { color: var(--accent-yellow); font-weight: 600; }
     .score-none { color: var(--text-sub); }
 
     .chart-header {
@@ -126,10 +125,10 @@
       display: block;
     }
 
-    .loading {
+    .loading-cell {
       text-align: center;
       color: var(--text-sub);
-      padding: 20px;
+      font-size: 0.85rem;
     }
   </style>
 </head>
@@ -141,7 +140,7 @@
       <h1>【相場流】新8銘柄 監視モニター</h1>
       <div class="status-text">基準: スコア60点以上 | 同時保有最大2枠 | 枠厳守配分</div>
     </div>
-    <div id="updateTime" class="status-text">データ通信中...</div>
+    <div id="updateTime" class="status-text">データ取得中...</div>
   </header>
 
   <div class="card">
@@ -158,9 +157,7 @@
             <th style="text-align: right;">目標株数</th>
           </tr>
         </thead>
-        <tbody id="stockTableBody">
-          <tr><td colspan="7" class="loading">最新データを取得・解析中...</td></tr>
-        </tbody>
+        <tbody id="stockTableBody"></tbody>
       </table>
     </div>
   </div>
@@ -193,53 +190,72 @@
   let stockDataMap = {};
   let selectedCode = "8306.T";
 
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-  // 3系統のCORSプロキシによる自動フォールバック取得
-  async function fetchStockWithFallback(symbol) {
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
-    
-    const proxies = [
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
-    ];
-
-    for (let i = 0; i < proxies.length; i++) {
-      try {
-        const proxyUrl = proxies[i](targetUrl);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6秒タイムアウト
-
-        const res = await fetch(proxyUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) continue;
-
-        const text = await res.text();
-        const data = JSON.parse(text);
-        const result = data.chart.result[0];
-        const ts = result.timestamp;
-        const q = result.indicators.quote[0];
-        
-        let bars = [];
-        for (let j = 0; j < ts.length; j++) {
-          if (q.close[j] !== null && q.open[j] !== null) {
-            bars.push({
-              date: new Date(ts[j] * 1000),
-              open: q.open[j],
-              high: q.high[j],
-              low: q.low[j],
-              close: q.close[j]
-            });
-          }
+  // Yahoo Financeのレスポンスを標準配列化
+  function parseYahooData(data) {
+    try {
+      const res = data.chart.result[0];
+      const ts = res.timestamp;
+      const q = res.indicators.quote[0];
+      let bars = [];
+      for (let i = 0; i < ts.length; i++) {
+        if (q.close[i] !== null && q.open[i] !== null) {
+          bars.push({
+            date: new Date(ts[i] * 1000),
+            open: q.open[i],
+            high: q.high[i],
+            low: q.low[i],
+            close: q.close[i]
+          });
         }
-        if (bars.length > 0) return bars;
-      } catch (e) {
-        // 次のプロキシへ自動フォールバック
-        continue;
       }
+      return bars.length >= 20 ? bars : null;
+    } catch (e) {
+      return null;
     }
+  }
+
+  // 3重フォールバックによる確実な株価取得
+  async function fetchStock(symbol) {
+    const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
+
+    // ルート1: corsproxy.io (正規構文)
+    try {
+      const url1 = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      const res1 = await fetch(url1);
+      if (res1.ok) {
+        const d1 = await res1.json();
+        const bars = parseYahooData(d1);
+        if (bars) return bars;
+      }
+    } catch (e) {}
+
+    // ルート2: codetabs
+    try {
+      const url2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+      const res2 = await fetch(url2);
+      if (res2.ok) {
+        const d2 = await res2.json();
+        const bars = parseYahooData(d2);
+        if (bars) return bars;
+      }
+    } catch (e) {}
+
+    // ルート3: allorigins (JSONラッパー展開)
+    try {
+      const url3 = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&timestamp=${Date.now()}`;
+      const res3 = await fetch(url3);
+      if (res3.ok) {
+        const wrapper = await res3.json();
+        if (wrapper.contents) {
+          const d3 = JSON.parse(wrapper.contents);
+          const bars = parseYahooData(d3);
+          if (bars) return bars;
+        }
+      }
+    } catch (e) {}
+
     return null;
   }
 
@@ -328,7 +344,7 @@
     minP -= padY; maxP += padY;
     const pRange = maxP - minP;
 
-    const chartLeft = 46;
+    const chartLeft = 48;
     const chartWidth = width - chartLeft;
     const getY = (p) => height - 24 - ((p - minP) / pRange) * (height - 36);
     const stepX = chartWidth / count;
@@ -365,6 +381,7 @@
       ctx.fillRect(x - stepX * 0.35, top, Math.max(stepX * 0.7, 1.5), Math.max(bot - top, 2));
     });
 
+    // 20MA
     ctx.strokeStyle = "#0a84ff";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -379,6 +396,7 @@
     });
     ctx.stroke();
 
+    // 5MA
     ctx.strokeStyle = "#ff3b30";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -393,6 +411,7 @@
     });
     ctx.stroke();
 
+    // 日付
     ctx.fillStyle = "#8e8e93";
     for (let dIdx = 2; dIdx < count; dIdx += 7) {
       if (sBars[dIdx]) {
@@ -420,7 +439,11 @@
       };
 
       if (!data) {
-        tr.innerHTML = `<td>${item.num}</td><td>${item.name}</td><td colspan="5" style="color:#8e8e93;">取得中...</td>`;
+        tr.innerHTML = `
+          <td style="font-weight: 600;">${item.num}</td>
+          <td style="font-weight: 600;">${item.name}</td>
+          <td colspan="5" class="loading-cell">通信中...</td>
+        `;
         tbody.appendChild(tr);
         return;
       }
@@ -446,7 +469,7 @@
       tr.innerHTML = `
         <td style="font-weight: 600;">${item.num}</td>
         <td style="font-weight: 600; color: ${item.code === selectedCode ? 'var(--accent-yellow)' : 'var(--text-main)'};">${item.name}</td>
-        <td style="text-align: right; font-weight: 600;">${pStr}</td>
+        <td style="text-align: right; font-weight: 700;">${pStr}</td>
         <td style="text-align: center;">${scoreHtml}</td>
         <td style="text-align: center;">${genHtml}</td>
         <td style="text-align: center;">${shinHtml}</td>
@@ -468,11 +491,11 @@
   }
 
   async function init() {
-    renderTable(); // 初期枠組みを即時表示
+    renderTable();
 
     for (const item of UNIVERSE) {
-      const bars = await fetchStockWithFallback(item.code);
-      if (bars && bars.length >= 20) {
+      const bars = await fetchStock(item.code);
+      if (bars) {
         const ma5 = calcMA(bars, 5);
         const ma20 = calcMA(bars, 20);
         const res = evaluate(bars, ma5, ma20);
@@ -483,10 +506,19 @@
           signal: res.signal,
           isMono: res.isMono
         };
-        renderTable(); // 1銘柄取得できるごとに順次描画更新
+        renderTable();
         if (item.code === selectedCode) updateChart();
+      } else {
+        // 取得失敗時の表示
+        const tbody = document.getElementById("stockTableBody");
+        const rows = tbody.querySelectorAll("tr");
+        UNIVERSE.forEach((u, idx) => {
+          if (u.code === item.code && !stockDataMap[u.code] && rows[idx]) {
+            rows[idx].children[2].textContent = "取得失敗";
+          }
+        });
       }
-      await sleep(250); // プロキシへの連続リクエスト過負荷を防止
+      await sleep(350); // プロキシのレートリミット対策ウェイト
     }
 
     const now = new Date();
