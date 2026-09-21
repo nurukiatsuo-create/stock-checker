@@ -17,7 +17,6 @@
       --ma5-red: #ff3b30;
       --ma20-blue: #0a84ff;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background-color: var(--bg-color);
@@ -28,108 +27,32 @@
       flex-direction: column;
       align-items: center;
     }
-
-    .container {
-      width: 100%;
-      max-width: 860px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 10px;
-    }
-
+    .container { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
+    header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
     h1 { font-size: 1.25rem; font-weight: 700; }
     .status-text { font-size: 0.8rem; color: var(--text-sub); }
-
-    .card {
-      background-color: var(--card-bg);
-      border-radius: 12px;
-      padding: 16px;
-      border: 1px solid var(--border-color);
-    }
-
+    .card { background-color: var(--card-bg); border-radius: 12px; padding: 16px; border: 1px solid var(--border-color); }
     .table-container { overflow-x: auto; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.95rem;
-    }
-
-    th {
-      color: var(--text-sub);
-      font-weight: 600;
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border-color);
-      white-space: nowrap;
-    }
-
-    td {
-      padding: 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      white-space: nowrap;
-    }
-
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
+    th { color: var(--text-sub); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+    td { padding: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
     tr.clickable-row { cursor: pointer; transition: background 0.15s; }
     tr.clickable-row:hover { background-color: rgba(255, 255, 255, 0.05); }
     tr.selected-row { background-color: rgba(255, 214, 10, 0.12); }
-
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-align: center;
-    }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; text-align: center; }
     .badge-wait { background-color: #2c2c2e; color: #aeaeb2; }
     .badge-buy { background-color: var(--buy-red); color: #fff; }
     .badge-short { background-color: var(--short-blue); color: #fff; }
-
     .score-high { color: var(--buy-red); font-weight: 700; }
     .score-mid { color: var(--accent-yellow); font-weight: 600; }
     .score-none { color: var(--text-sub); }
-
-    .chart-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .chart-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--accent-yellow);
-    }
-
-    .legend {
-      display: flex;
-      gap: 12px;
-      font-size: 0.75rem;
-    }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .chart-title { font-size: 1.05rem; font-weight: 700; color: var(--accent-yellow); }
+    .legend { display: flex; gap: 12px; font-size: 0.75rem; }
     .legend-item { display: flex; align-items: center; gap: 4px; }
     .dot-ma5 { width: 10px; height: 10px; background: var(--ma5-red); border-radius: 2px; }
     .dot-ma20 { width: 10px; height: 10px; background: var(--ma20-blue); border-radius: 2px; }
-
-    #chartCanvas {
-      width: 100%;
-      height: 280px;
-      display: block;
-    }
-
-    .loading-cell {
-      text-align: center;
-      color: var(--text-sub);
-      font-size: 0.85rem;
-    }
+    #chartCanvas { width: 100%; height: 280px; display: block; }
   </style>
 </head>
 <body>
@@ -140,7 +63,7 @@
       <h1>【相場流】新8銘柄 監視モニター</h1>
       <div class="status-text">基準: スコア60点以上 | 同時保有最大2枠 | 枠厳守配分</div>
     </div>
-    <div id="updateTime" class="status-text">データ通信中...</div>
+    <div id="updateTime" class="status-text">読込中...</div>
   </header>
 
   <div class="card">
@@ -175,178 +98,29 @@
 </div>
 
 <script>
-  const UNIVERSE = [
-    { code: "8306.T", num: "8306", name: "三菱UFJ", target: 300 },
-    { code: "7182.T", num: "7182", name: "ゆうちょ銀行", target: 400 },
-    { code: "8393.T", num: "8393", name: "宮崎銀行", target: 200 },
-    { code: "8058.T", num: "8058", name: "三菱商事", target: 200 },
-    { code: "6981.T", num: "6981", name: "村田製作所", target: 200 },
-    { code: "4502.T", num: "4502", name: "武田薬品", target: 100 },
-    { code: "2768.T", num: "2768", name: "双日", target: 100 },
-    { code: "6324.T", num: "6324", name: "ハーモニック", target: 100 }
-  ];
-
-  const MIN_SCORE = 60;
-  let stockDataMap = {};
+  let dataset = null;
   let selectedCode = "8306.T";
 
-  // タイムアウト付き fetch 関数（指定秒数で強制切断）
-  async function fetchWithTimeout(url, timeoutMs = 3200) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-      return res;
-    } catch (err) {
-      clearTimeout(timer);
-      throw err;
-    }
-  }
-
-  function parseYahooData(data) {
-    try {
-      const res = data.chart.result[0];
-      const ts = res.timestamp;
-      const q = res.indicators.quote[0];
-      let bars = [];
-      for (let i = 0; i < ts.length; i++) {
-        if (q.close[i] !== null && q.open[i] !== null) {
-          bars.push({
-            date: new Date(ts[i] * 1000),
-            open: q.open[i],
-            high: q.high[i],
-            low: q.low[i],
-            close: q.close[i]
-          });
-        }
-      }
-      return bars.length >= 20 ? bars : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // 3秒タイムアウト付き・多重フォールバック
-  async function fetchStock(symbol) {
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
-
-    // ルート1: allorigins (raw)
-    try {
-      const url1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}&_=${Date.now()}`;
-      const res1 = await fetchWithTimeout(url1, 3500);
-      if (res1.ok) {
-        const d1 = await res1.json();
-        const bars = parseYahooData(d1);
-        if (bars) return bars;
-      }
-    } catch (e) {}
-
-    // ルート2: corsproxy.io
-    try {
-      const url2 = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-      const res2 = await fetchWithTimeout(url2, 3500);
-      if (res2.ok) {
-        const d2 = await res2.json();
-        const bars = parseYahooData(d2);
-        if (bars) return bars;
-      }
-    } catch (e) {}
-
-    // ルート3: codetabs
-    try {
-      const url3 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-      const res3 = await fetchWithTimeout(url3, 3500);
-      if (res3.ok) {
-        const d3 = await res3.json();
-        const bars = parseYahooData(d3);
-        if (bars) return bars;
-      }
-    } catch (e) {}
-
-    return null;
-  }
-
-  function calcMA(bars, period) {
-    return bars.map((b, i) => {
-      if (i < period - 1) return null;
-      let sum = 0;
-      for (let j = 0; j < period; j++) sum += bars[i - j].close;
-      return sum / period;
-    });
-  }
-
-  function evaluate(bars, ma5, ma20) {
-    const i = bars.length - 1;
-    const curr = bars[i], prev = bars[i - 1];
-    const c_open = curr.open, c_close = curr.close;
-    const c_high = curr.high, c_low = curr.low;
-    const p_close = prev.close;
-    const m5 = ma5[i], m20 = ma20[i];
-    const p_m5 = ma5[i - 1], p_m20 = ma20[i - 1];
-
-    if (!m5 || !m20 || !p_m5 || !p_m20) return { signal: null, score: 0, price: c_close };
-
-    const isYang = c_close >= c_open;
-    const isYin = c_close < c_open;
-    const mid = (c_open + c_close) / 2.0;
-    const ma20_slope = ((m20 - p_m20) / p_m20) * 100;
-    const bias_20 = ((c_close - m20) / m20) * 100;
-
-    const isShita = isYang && (mid > m5) && (c_close > m5) && (p_close <= p_m5) && (m5 >= p_m5);
-    const isGyaku = isYin && (mid < m5) && (c_close < m5) && (p_close >= p_m5) && (m5 <= p_m5);
-    const isMono = (c_low <= m20 * 1.015) && (c_close > m20) && isYang && (m20 >= p_m20);
-
-    let signal = null;
-    let score = 0;
-
-    if (isShita && (m20 >= p_m20) && (c_close >= m20)) {
-      signal = "BUY";
-      score = isMono ? 80 : 50;
-    } else if (isGyaku && (m20 <= p_m20) && (c_close <= m20)) {
-      signal = "SHORT";
-      score = 50;
-    }
-
-    if (signal === "BUY") {
-      score += Math.min(Math.max(Math.floor(ma20_slope * 20), 0), 20);
-      const hl = c_high - c_low;
-      if (hl > 0) score += Math.floor((Math.abs(c_close - c_open) / hl) * 10);
-      if (Math.abs(bias_20) > 8.0) score -= 15;
-    }
-
-    if (signal === "BUY" && score < MIN_SCORE) {
-      signal = null;
-    }
-
-    return { signal, score, price: c_close, isMono };
-  }
-
-  function drawChart(bars, ma5, ma20) {
+  function drawChart(bars) {
     const canvas = document.getElementById("chartCanvas");
     const ctx = canvas.getContext("2d");
-    
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
+    const width = rect.width, height = rect.height;
     ctx.clearRect(0, 0, width, height);
 
-    const count = 38;
-    const sBars = bars.slice(-count);
-    const sMA5 = ma5.slice(-count);
-    const sMA20 = ma20.slice(-count);
-
+    const count = bars.length;
     let minP = Infinity, maxP = -Infinity;
-    sBars.forEach(b => {
+    bars.forEach(b => {
       if (b.low < minP) minP = b.low;
       if (b.high > maxP) maxP = b.high;
+      if (b.ma20 && b.ma20 < minP) minP = b.ma20;
+      if (b.ma20 && b.ma20 > maxP) maxP = b.ma20;
     });
-    sMA20.forEach(v => { if (v && v < minP) minP = v; if (v && v > maxP) maxP = v; });
 
     const padY = (maxP - minP) * 0.08;
     minP -= padY; maxP += padY;
@@ -371,7 +145,7 @@
       ctx.fillText(Math.round(p).toLocaleString(), 4, y + 3);
     }
 
-    sBars.forEach((b, idx) => {
+    bars.forEach((b, idx) => {
       const x = chartLeft + idx * stepX + stepX / 2;
       const isYang = b.close >= b.open;
       const color = isYang ? "#ff453a" : "#0a84ff";
@@ -389,41 +163,38 @@
       ctx.fillRect(x - stepX * 0.35, top, Math.max(stepX * 0.7, 1.5), Math.max(bot - top, 2));
     });
 
+    // 20MA
     ctx.strokeStyle = "#0a84ff";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
-    let started20 = false;
-    sMA20.forEach((val, idx) => {
-      if (val) {
+    let s20 = false;
+    bars.forEach((b, idx) => {
+      if (b.ma20) {
         const x = chartLeft + idx * stepX + stepX / 2;
-        const y = getY(val);
-        if (!started20) { ctx.moveTo(x, y); started20 = true; }
-        else { ctx.lineTo(x, y); }
+        const y = getY(b.ma20);
+        if (!s20) { ctx.moveTo(x, y); s20 = true; } else ctx.lineTo(x, y);
       }
     });
     ctx.stroke();
 
+    // 5MA
     ctx.strokeStyle = "#ff3b30";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
-    let started5 = false;
-    sMA5.forEach((val, idx) => {
-      if (val) {
+    let s5 = false;
+    bars.forEach((b, idx) => {
+      if (b.ma5) {
         const x = chartLeft + idx * stepX + stepX / 2;
-        const y = getY(val);
-        if (!started5) { ctx.moveTo(x, y); started5 = true; }
-        else { ctx.lineTo(x, y); }
+        const y = getY(b.ma5);
+        if (!s5) { ctx.moveTo(x, y); s5 = true; } else ctx.lineTo(x, y);
       }
     });
     ctx.stroke();
 
-    ctx.fillStyle = "#8e8e93";
     for (let dIdx = 2; dIdx < count; dIdx += 7) {
-      if (sBars[dIdx]) {
-        const d = sBars[dIdx].date;
-        const str = `${d.getMonth()+1}/${d.getDate()}`;
+      if (bars[dIdx]) {
         const x = chartLeft + dIdx * stepX - 10;
-        ctx.fillText(str, x, height - 6);
+        ctx.fillText(bars[dIdx].date, x, height - 6);
       }
     }
   }
@@ -431,59 +202,28 @@
   function renderTable() {
     const tbody = document.getElementById("stockTableBody");
     tbody.innerHTML = "";
+    if (!dataset) return;
 
-    UNIVERSE.forEach(item => {
-      const data = stockDataMap[item.code];
+    for (const [code, item] of Object.entries(dataset.stocks)) {
       const tr = document.createElement("tr");
-      tr.className = `clickable-row ${item.code === selectedCode ? "selected-row" : ""}`;
-      
+      tr.className = `clickable-row ${code === selectedCode ? "selected-row" : ""}`;
       tr.onclick = () => {
-        selectedCode = item.code;
+        selectedCode = code;
         renderTable();
         updateChart();
       };
 
-      if (!data) {
-        tr.innerHTML = `
-          <td style="font-weight: 600;">${item.num}</td>
-          <td style="font-weight: 600;">${item.name}</td>
-          <td colspan="5" class="loading-cell">通信中...</td>
-        `;
-        tbody.appendChild(tr);
-        return;
-      }
-
-      if (data.failed) {
-        tr.innerHTML = `
-          <td style="font-weight: 600;">${item.num}</td>
-          <td style="font-weight: 600;">${item.name}</td>
-          <td colspan="5" class="loading-cell" style="color:#ff453a;">取得失敗</td>
-        `;
-        tbody.appendChild(tr);
-        return;
-      }
-
-      const pStr = Math.floor(data.price).toLocaleString() + " 円";
+      const pStr = Math.floor(item.price).toLocaleString() + " 円";
       let scoreHtml = `<span class="score-none">--</span>`;
-      if (data.score >= 70) {
-        scoreHtml = `<span class="score-high">${data.score}点</span>`;
-      } else if (data.score >= 50) {
-        scoreHtml = `<span class="score-mid">${data.score}点</span>`;
-      }
+      if (item.score >= 70) scoreHtml = `<span class="score-high">${item.score}点</span>`;
+      else if (item.score >= 50) scoreHtml = `<span class="score-mid">${item.score}点</span>`;
 
-      let genHtml = `<span class="badge badge-wait">待機</span>`;
-      if (data.signal === "BUY") {
-        genHtml = `<span class="badge badge-buy">現買</span>`;
-      }
-
-      let shinHtml = `<span class="badge badge-wait">待機</span>`;
-      if (data.signal === "SHORT") {
-        shinHtml = `<span class="badge badge-short">空売</span>`;
-      }
+      const genHtml = item.signal === "BUY" ? `<span class="badge badge-buy">現買</span>` : `<span class="badge badge-wait">待機</span>`;
+      const shinHtml = item.signal === "SHORT" ? `<span class="badge badge-short">空売</span>` : `<span class="badge badge-wait">待機</span>`;
 
       tr.innerHTML = `
         <td style="font-weight: 600;">${item.num}</td>
-        <td style="font-weight: 600; color: ${item.code === selectedCode ? 'var(--accent-yellow)' : 'var(--text-main)'};">${item.name}</td>
+        <td style="font-weight: 600; color: ${code === selectedCode ? 'var(--accent-yellow)' : 'var(--text-main)'};">${item.name}</td>
         <td style="text-align: right; font-weight: 700;">${pStr}</td>
         <td style="text-align: center;">${scoreHtml}</td>
         <td style="text-align: center;">${genHtml}</td>
@@ -491,57 +231,31 @@
         <td style="text-align: right; color: var(--text-sub);">${item.target}株</td>
       `;
       tbody.appendChild(tr);
-    });
+    }
   }
 
   function updateChart() {
-    const item = UNIVERSE.find(u => u.code === selectedCode);
-    const data = stockDataMap[selectedCode];
-    const infoEl = document.getElementById("selectedStockInfo");
-    
-    if (item && data && !data.failed) {
-      infoEl.textContent = `${item.name} (${item.num}) - 最新: ${Math.floor(data.price).toLocaleString()}円`;
-      drawChart(data.bars, data.ma5, data.ma20);
-    }
+    if (!dataset || !dataset.stocks[selectedCode]) return;
+    const item = dataset.stocks[selectedCode];
+    document.getElementById("selectedStockInfo").textContent = `${item.name} (${item.num}) - 最新: ${Math.floor(item.price).toLocaleString()}円`;
+    drawChart(item.bars);
   }
 
-  // 1銘柄ごとの非同期取得処理
-  async function loadSingleStock(item) {
-    const bars = await fetchStock(item.code);
-    if (bars) {
-      const ma5 = calcMA(bars, 5);
-      const ma20 = calcMA(bars, 20);
-      const res = evaluate(bars, ma5, ma20);
-      stockDataMap[item.code] = {
-        bars, ma5, ma20,
-        price: res.price,
-        score: res.score,
-        signal: res.signal,
-        isMono: res.isMono,
-        failed: false
-      };
-    } else {
-      stockDataMap[item.code] = { failed: true };
-    }
-    renderTable();
-    if (item.code === selectedCode) updateChart();
-  }
-
-  // 8銘柄を一斉並列取得
   async function init() {
-    renderTable();
-
-    const promises = UNIVERSE.map(item => loadSingleStock(item));
-    await Promise.allSettled(promises);
-
-    const now = new Date();
-    document.getElementById("updateTime").textContent = `更新: ${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} JST`;
+    try {
+      // 同一リポジトリ内の静的JSONをフェッチ (CORS制約なし)
+      const res = await fetch(`stock_data.json?_=${Date.now()}`);
+      if (!res.ok) throw new Error("JSON読み込み失敗");
+      dataset = await res.json();
+      document.getElementById("updateTime").textContent = `更新: ${dataset.updated_at}`;
+      renderTable();
+      updateChart();
+    } catch (e) {
+      document.getElementById("updateTime").textContent = "データ未生成 (初回実行待ち)";
+    }
   }
 
-  window.addEventListener("resize", () => {
-    if (stockDataMap[selectedCode] && !stockDataMap[selectedCode].failed) updateChart();
-  });
-
+  window.addEventListener("resize", () => { if (dataset) updateChart(); });
   init();
 </script>
 
