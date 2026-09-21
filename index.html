@@ -56,7 +56,6 @@
       border: 1px solid var(--border-color);
     }
 
-    /* テーブルスタイル */
     .table-container { overflow-x: auto; }
     table {
       width: 100%;
@@ -99,7 +98,6 @@
     .score-mid { color: var(--accent-yellow); }
     .score-none { color: var(--text-sub); }
 
-    /* チャートエリア */
     .chart-header {
       display: flex;
       justify-content: space-between;
@@ -141,12 +139,11 @@
   <header>
     <div>
       <h1>【相場流】新8銘柄 監視モニター</h1>
-      <div class="status-text">基準: スコア60点以上 | 同時保有最大2枠 | 打診100株</div>
+      <div class="status-text">基準: スコア60点以上 | 同時保有最大2枠 | 枠厳守配分</div>
     </div>
     <div id="updateTime" class="status-text">取得中...</div>
   </header>
 
-  <!-- 8銘柄一覧テーブル -->
   <div class="card">
     <div class="table-container">
       <table>
@@ -168,7 +165,6 @@
     </div>
   </div>
 
-  <!-- チャート表示エリア -->
   <div class="card">
     <div class="chart-header">
       <div id="selectedStockInfo" class="chart-title">銘柄を選択してください</div>
@@ -182,13 +178,14 @@
 </div>
 
 <script>
+  // 1枠75万円厳守の目標株数設定
   const UNIVERSE = [
     { code: "8306.T", num: "8306", name: "三菱UFJ", target: 300 },
-    { code: "7182.T", num: "7182", name: "ゆうちょ銀行", target: 500 },
+    { code: "7182.T", num: "7182", name: "ゆうちょ銀行", target: 400 },
     { code: "8393.T", num: "8393", name: "宮崎銀行", target: 200 },
-    { code: "8058.T", num: "8058", name: "三菱商事", target: 300 },
-    { code: "6981.T", num: "6981", name: "村田製作所", target: 300 },
-    { code: "4502.T", num: "4502", name: "武田薬品", target: 200 },
+    { code: "8058.T", num: "8058", name: "三菱商事", target: 200 },
+    { code: "6981.T", num: "6981", name: "村田製作所", target: 200 },
+    { code: "4502.T", num: "4502", name: "武田薬品", target: 100 },
     { code: "2768.T", num: "2768", name: "双日", target: 100 },
     { code: "6324.T", num: "6324", name: "ハーモニック", target: 100 }
   ];
@@ -197,7 +194,6 @@
   let stockDataMap = {};
   let selectedCode = "8306.T";
 
-  // CORSプロキシ経由での株価データ取得
   async function fetchStock(symbol) {
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
@@ -237,7 +233,6 @@
     });
   }
 
-  // 相場流判定ロジック (スコア60点以上基準)
   function evaluate(bars, ma5, ma20) {
     const i = bars.length - 1;
     const curr = bars[i], prev = bars[i - 1];
@@ -277,7 +272,6 @@
       if (Math.abs(bias_20) > 8.0) score -= 15;
     }
 
-    // 60点未満の弱い買いシグナルはダマシとして待機化
     if (signal === "BUY" && score < MIN_SCORE) {
       signal = null;
     }
@@ -285,12 +279,10 @@
     return { signal, score, price: c_close, isMono };
   }
 
-  // キャンバス チャート描画
   function drawChart(bars, ma5, ma20) {
     const canvas = document.getElementById("chartCanvas");
     const ctx = canvas.getContext("2d");
     
-    // 高解像度ディスプレイ対応
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
@@ -322,7 +314,6 @@
     const getY = (p) => height - 24 - ((p - minP) / pRange) * (height - 36);
     const stepX = chartWidth / count;
 
-    // 水平グリッド & 価格軸
     ctx.font = "10px sans-serif";
     ctx.fillStyle = "#8e8e93";
     for (let g = 0; g <= 3; g++) {
@@ -337,7 +328,6 @@
       ctx.fillText(Math.round(p).toLocaleString(), 4, y + 3);
     }
 
-    // ローソク足
     sBars.forEach((b, idx) => {
       const x = chartLeft + idx * stepX + stepX / 2;
       const isYang = b.close >= b.open;
@@ -356,7 +346,6 @@
       ctx.fillRect(x - stepX * 0.35, top, Math.max(stepX * 0.7, 1.5), Math.max(bot - top, 2));
     });
 
-    // 20MA (青)
     ctx.strokeStyle = "#0a84ff";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -371,7 +360,6 @@
     });
     ctx.stroke();
 
-    // 5MA (赤)
     ctx.strokeStyle = "#ff3b30";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -386,7 +374,6 @@
     });
     ctx.stroke();
 
-    // X軸 日付ラベル
     ctx.fillStyle = "#8e8e93";
     for (let dIdx = 2; dIdx < count; dIdx += 7) {
       if (sBars[dIdx]) {
