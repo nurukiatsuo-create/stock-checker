@@ -1,0 +1,54 @@
+name: Daily Stock Technical Check
+
+on:
+  schedule:
+    # 平日（月〜金）の日本時間 15:35 に自動実行（UTC 06:35）
+    - cron: '35 6 * * 1-5'
+  # GitHub の Web 画面から手動で即時実行するためのトリガー
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write  # 判定結果を Issue に自動投稿・通知する場合に必要
+
+jobs:
+  run-portfolio-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python 環境のセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: 依存ライブラリのインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy
+
+      - name: 相場流エリート6銘柄 スキャン実行
+        id: run_check
+        run: |
+          # 実行ログを出力しつつ、結果を変数・ファイルに保持
+          python check_all_portfolio.py 2>&1 | tee output.log
+
+      - name: 判定結果を GitHub Issues に自動投稿（通知用・任意）
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('output.log')) {
+              const logContent = fs.readFileSync('output.log', 'utf8');
+              const today = new Date().toISOString().split('T')[0];
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `【相場流 監視レポート】${today}`,
+                body: '```text\n' + logContent + '\n```'
+              });
+            }
