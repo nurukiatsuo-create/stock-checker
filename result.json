@@ -1,5 +1,5 @@
 {
-  "updated_at": "09/21 19:32 JST",
+  "updated_at": "09/21 20:26 JST",
   "top_stock": {
     "code": "9107",
     "name": "川崎汽船",
@@ -41,45 +41,6 @@
       "entry_price": 3891.4
     },
     {
-      "code": "7269",
-      "name": "スズキ",
-      "price": "2,028円",
-      "raw_price": 2028.0,
-      "bias": "-2.8%",
-      "status": "下降トレンド(空売)",
-      "badge": "SHORT",
-      "score": 49,
-      "is_holding": false,
-      "pos_type": null,
-      "entry_price": null
-    },
-    {
-      "code": "8002",
-      "name": "丸紅",
-      "price": "4,976円",
-      "raw_price": 4976.0,
-      "bias": "-1.0%",
-      "status": "待機",
-      "badge": "NONE",
-      "score": 8,
-      "is_holding": false,
-      "pos_type": null,
-      "entry_price": null
-    },
-    {
-      "code": "6326",
-      "name": "クボタ",
-      "price": "2,749円",
-      "raw_price": 2749.5,
-      "bias": "-3.5%",
-      "status": "待機",
-      "badge": "NONE",
-      "score": 7,
-      "is_holding": false,
-      "pos_type": null,
-      "entry_price": null
-    },
-    {
       "code": "7012",
       "name": "川崎重工",
       "price": "2,404円",
@@ -87,7 +48,7 @@
       "bias": "-2.5%",
       "status": "待機",
       "badge": "NONE",
-      "score": 4,
+      "score": 0,
       "is_holding": false,
       "pos_type": null,
       "entry_price": null
@@ -100,7 +61,20 @@
       "bias": "-0.9%",
       "status": "待機",
       "badge": "NONE",
-      "score": 3,
+      "score": 0,
+      "is_holding": false,
+      "pos_type": null,
+      "entry_price": null
+    },
+    {
+      "code": "8002",
+      "name": "丸紅",
+      "price": "4,976円",
+      "raw_price": 4976.0,
+      "bias": "-1.0%",
+      "status": "待機",
+      "badge": "NONE",
+      "score": 0,
       "is_holding": false,
       "pos_type": null,
       "entry_price": null
