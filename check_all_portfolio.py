@@ -1,9 +1,10 @@
 from datetime import datetime
 import json
 import os
+import shutil
 import matplotlib
 
-matplotlib.use("Agg")  # GitHub Actions等のCUI環境で描画するためのヘッドレス設定
+matplotlib.use("Agg")  # CUI/GitHub Actions描画用
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,7 +15,7 @@ import yfinance as yf
 JST = pytz.timezone("Asia/Tokyo")
 
 # ==========================================
-# 1. 監視対象銘柄リスト（相場流スイング枠）
+# 1. 監視対象銘柄リスト
 # ==========================================
 UNIVERSE = {
     "8306.T": "三菱UFJ",
@@ -27,12 +28,12 @@ UNIVERSE = {
 }
 
 # ==========================================
-# 2. 現在の保有ポジション管理
+# 2. 保有ポジション設定
 # ==========================================
 HOLDINGS = {
     "9107": {
         "name": "川崎汽船",
-        "side": "BUY",
+        "side": "buy",
         "entry_price": 3500.40,
         "shares": 200,
         "stop_loss": 3490.0,
@@ -41,7 +42,7 @@ HOLDINGS = {
     },
     "7011": {
         "name": "三菱重工",
-        "side": "BUY",
+        "side": "buy",
         "entry_price": 3891.40,
         "shares": 100,
         "stop_loss": 3830.0,
@@ -65,7 +66,6 @@ def evaluate_stock(df, code_clean):
     ma5, ma20 = float(curr["MA5"]), float(curr["MA20"])
     p_ma5, p_ma20 = float(prev["MA5"]), float(prev["MA20"])
 
-    # 移動平均線の傾き (%)
     ma5_slope = ((ma5 - p_ma5) / p_ma5) * 100 if p_ma5 > 0 else 0.0
     ma20_slope = ((ma20 - p_ma20) / p_ma20) * 100 if p_ma20 > 0 else 0.0
 
@@ -74,7 +74,6 @@ def evaluate_stock(df, code_clean):
     is_ma20_up = ma20 >= p_ma20
     is_ma20_down = ma20 <= p_ma20
 
-    # 20日線乖離率
     bias_20 = ((c_close - ma20) / ma20) * 100 if ma20 > 0 else 0.0
     bias_str = f"{bias_20:+.1f}%"
 
@@ -82,7 +81,7 @@ def evaluate_stock(df, code_clean):
     is_yang = c_close >= c_open
     is_yin = c_close < c_open
 
-    # 相場流：シグナル判定
+    # 相場流基本シグナル
     is_shitahanshin = (
         is_yang
         and (candle_body_mid > ma5)
@@ -104,95 +103,93 @@ def evaluate_stock(df, code_clean):
     )
 
     # ----------------------------------------------------
-    # A. 保有銘柄のエグジット判定（優先処理）
+    # A. 保有銘柄判定（Scriptableのバッジ仕様に準拠）
     # ----------------------------------------------------
     if code_clean in HOLDINGS:
         h = HOLDINGS[code_clean]
-        side = h.get("side", "BUY")
+        pos_type = h.get("side", "buy")
+        entry_price = float(h.get("entry_price", c_close))
 
-        # タイムゾーン不整合を防止した安全な日付比較
         raw_date = h.get("entry_date", df.index[-1])
         entry_date = pd.to_datetime(raw_date)
         if entry_date.tzinfo is not None:
             entry_date = entry_date.tz_localize(None)
 
         candles_since_entry = int(len(df[df.index >= entry_date]))
+        pnl = ((c_close - entry_price) / entry_price) * 100
 
-        if side == "BUY":
-            pnl = ((c_close - h["entry_price"]) / h["entry_price"]) * 100
+        # 木曜朝の発注指値に接近・到達している場合、またはロスカット
+        if c_close >= h["target_profit"] or c_high >= h["target_profit"]:
+            status = "手仕舞(利確指値)"
+            badge = "EXIT"
+        elif c_close <= h["stop_loss"] or c_low <= h["stop_loss"]:
+            status = "手仕舞(ロスカット)"
+            badge = "EXIT"
+        elif is_gyaku_shitahanshin:
+            status = "手仕舞(逆下半身)"
+            badge = "EXIT"
+        elif candles_since_entry >= 14 and is_yin:
+            status = f"手仕舞(日柄{candles_since_entry}本)"
+            badge = "EXIT"
+        else:
+            status = f"保有中({pnl:+.1f}%)"
+            badge = "HOLD"
 
-            if c_close <= h["stop_loss"] or c_low <= h["stop_loss"]:
-                return {
-                    "status": "ロスカット撤退",
-                    "badge": "EXIT",
-                    "bias": bias_str,
-                    "score": -99,
-                }
-            elif is_gyaku_shitahanshin:
-                return {
-                    "status": "手仕舞い(逆下半身)",
-                    "badge": "EXIT",
-                    "bias": bias_str,
-                    "score": -99,
-                }
-            elif c_close >= h["target_profit"]:
-                return {
-                    "status": "利確指値到達",
-                    "badge": "EXIT",
-                    "bias": bias_str,
-                    "score": -99,
-                }
-            elif candles_since_entry >= 14 and is_yin:
-                return {
-                    "status": f"手仕舞い(日柄{candles_since_entry}本・陰線)",
-                    "badge": "EXIT",
-                    "bias": bias_str,
-                    "score": -99,
-                }
-            else:
-                return {
-                    "status": f"保有継続({pnl:+.1f}%/日柄{candles_since_entry}本)",
-                    "badge": "HOLD",
-                    "bias": bias_str,
-                    "score": 0,
-                }
+        return {
+            "status": status,
+            "badge": badge,
+            "bias": bias_str,
+            "score": 0,
+            "is_holding": True,
+            "pos_type": pos_type,
+            "entry_price": entry_price,
+        }
 
     # ----------------------------------------------------
-    # B. 未保有銘柄の優先度スコアリング
+    # B. 未保有銘柄判定（空売り・買いシグナル検出）
     # ----------------------------------------------------
     score = 0
+    status = "待機"
+    badge = "NONE"
 
+    # シグナル判定（Scriptableが「現買」「空売」と認識する文字を含める）
     if is_shitahanshin and is_monowakare:
         score += 80
-        status = "下半身+ものわかれ(強買)"
+        status = "下半身+ものわかれ(現買)"
         badge = "BUY"
     elif is_shitahanshin:
         score += 50
-        status = "下半身(買い)"
+        status = "下半身(現買)"
         badge = "BUY"
     elif is_gyaku_shitahanshin:
         score += 50
-        status = "逆下半身(空売り)"
+        status = "逆下半身(空売)"
+        badge = "SHORT"
+    elif (
+        c_close < ma20
+        and is_ma20_down
+        and c_close < ma5
+        and not is_shitahanshin
+    ):
+        # 相場流：下降トレンド継続中（戻り売りゾーン）
+        score += 40
+        status = "下降トレンド(空売)"
         badge = "SHORT"
     elif is_monowakare:
         score += 30
-        status = "ものわかれ初動"
+        status = "ものわかれ(現買)"
         badge = "BUY"
-    else:
-        return {"status": "様子見", "badge": "NONE", "bias": bias_str, "score": 0}
 
-    # 【加点1】20日線の傾き（トレンドの勢い）最大+20点
+    # 加減点ロジック
     if badge == "BUY" and is_ma20_up:
         score += min(max(int(ma20_slope * 20), 0), 20)
     elif badge == "SHORT" and is_ma20_down:
         score += min(max(int(abs(ma20_slope) * 20), 0), 20)
 
-    # 【加点2】ローソク足の実体比率（推進力）最大+10点
     hl_range = c_high - c_low
     body_ratio = (abs(c_close - c_open) / hl_range) if hl_range > 0 else 0.0
     score += int(body_ratio * 10)
 
-    # 【減点】過熱感（20日線乖離率 8%超）
     if abs(bias_20) > 8.0:
         score -= 15
 
@@ -201,22 +198,23 @@ def evaluate_stock(df, code_clean):
         "badge": badge,
         "bias": bias_str,
         "score": int(score),
+        "is_holding": False,
+        "pos_type": None,
+        "entry_price": None,
     }
 
 
 # ==========================================
-# 4. チャート画像生成（Scriptableウィジェット用）
+# 4. チャート画像生成（個別画像 + 共通画像）
 # ==========================================
-def generate_chart(df, name, code, output_path="chart.png"):
-    plot_df = df.tail(40).copy()  # 直近40日分を描画
+def generate_chart(df, name, code, output_path):
+    plot_df = df.tail(40).copy()
 
     fig, ax = plt.subplots(figsize=(6, 3.2), facecolor="#141414")
     ax.set_facecolor("#141414")
-
-    # グリッド線
     ax.grid(True, linestyle=":", alpha=0.3, color="#555555")
 
-    # 移動平均線
+    # 5日線（赤）・20日線（青）
     ax.plot(
         plot_df.index,
         plot_df["MA5"],
@@ -234,19 +232,13 @@ def generate_chart(df, name, code, output_path="chart.png"):
         alpha=0.9,
     )
 
-    # ローソク足の描画
     width = 0.6
     for idx, row in plot_df.iterrows():
         o, c, h, l = row["Open"], row["Close"], row["High"], row["Low"]
         color = "#ff4444" if c >= o else "#3399ff"
-
-        # ヒゲ
         ax.vlines(idx, l, h, color=color, linewidth=1.0, alpha=0.8)
-        # 実体
         lower = min(o, c)
-        height = abs(c - o)
-        if height == 0:
-            height = 0.5
+        height = max(abs(c - o), 0.5)
         ax.bar(
             idx,
             height,
@@ -257,13 +249,15 @@ def generate_chart(df, name, code, output_path="chart.png"):
             alpha=0.9,
         )
 
-    # 直近高値ライン（黄色破線）
-    recent_high = plot_df["High"].max()
+    # 水平抵抗線（直近高値）
     ax.axhline(
-        recent_high, color="#f1c40f", linestyle="--", linewidth=1.0, alpha=0.7
+        plot_df["High"].max(),
+        color="#f1c40f",
+        linestyle="--",
+        linewidth=1.0,
+        alpha=0.7,
     )
 
-    # 軸設定
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
     ax.tick_params(colors="#888888", labelsize=8)
     for spine in ax.spines.values():
@@ -295,11 +289,10 @@ def main():
         if df.empty or len(df) < 25:
             continue
 
-        # --- タイムゾーンエラーの根本解消処理 ---
+        # タイムゾーンの正規化
         if df.index.tz is not None:
             df.index = df.index.tz_convert(JST).tz_localize(None)
 
-        # 移動平均線
         df["MA5"] = df["Close"].rolling(5).mean()
         df["MA20"] = df["Close"].rolling(20).mean()
 
@@ -319,15 +312,21 @@ def main():
                 "status": res["status"],
                 "badge": res["badge"],
                 "score": res["score"],
+                "is_holding": res["is_holding"],
+                "pos_type": res["pos_type"],
+                "entry_price": res["entry_price"],
             }
         )
         chart_targets[code_clean] = (df, name)
 
-    # ----------------------------------------------------
-    # 並び替え（シグナル点灯を上位、スコア降順）
-    # ----------------------------------------------------
+        # 個別銘柄チャート画像の出力 (chart_{code}.png)
+        chart_filename = f"chart_{code_clean}.png"
+        generate_chart(df, name, code_clean, chart_filename)
+
+    # 並び替え（保有中またはシグナル点灯銘柄を優先、スコア順）
     stock_results.sort(
         key=lambda x: (
+            x["is_holding"],
             x["badge"] in ["BUY", "SHORT"],
             x["score"],
             -x["raw_price"],
@@ -337,13 +336,11 @@ def main():
 
     top_stock = stock_results[0] if stock_results else None
 
-    # チャート画像の出力（最優先銘柄、または保有銘柄を描画）
+    # 共通チャート（chart.png）の生成（最優先銘柄をコピー）
     if top_stock and top_stock["code"] in chart_targets:
-        df_top, name_top = chart_targets[top_stock["code"]]
-        generate_chart(df_top, name_top, top_stock["code"], "chart.png")
-        print(f"チャート生成完了: chart.png -> {name_top}")
+        top_code = top_stock["code"]
+        shutil.copy(f"chart_{top_code}.png", "chart.png")
 
-    # JSON書き出し
     output_data = {
         "updated_at": now_jst,
         "top_stock": top_stock,
@@ -353,11 +350,7 @@ def main():
     with open("result.json", "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
-    print(f"[{now_jst}] 処理完了 -> result.json 出力完了")
-    if top_stock:
-        print(
-            f"★ 最優先銘柄: {top_stock['name']} ({top_stock['code']}) | 状態: {top_stock['status']} | スコア: {top_stock['score']}点"
-        )
+    print(f"[{now_jst}] 処理完了: result.json および 全銘柄チャート画像を出力")
 
 
 if __name__ == "__main__":
