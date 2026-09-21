@@ -1,176 +1,270 @@
-import os
+from datetime import datetime
 import json
-import datetime
-import shutil
-import yfinance as yf
-import pandas as pd
+import os
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import mplfinance as mpf
+import pandas as pd
+import pytz
+import yfinance as yf
+
+JST = pytz.timezone("Asia/Tokyo")
 
 # ==========================================
-# 1. 監視・保有銘柄設定
+# 監視対象銘柄リスト（相場流スイング枠）
 # ==========================================
-HOLDINGS = {
-    "9107": {"entry_price": 3498.20, "type": "buy", "shares": 200},   # 三菱UFJ（買）
+UNIVERSE = {
+    "8306.T": "三菱UFJ",
+    "6326.T": "クボタ",
+    "7269.T": "スズキ",
+    "7011.T": "三菱重工",
+    "7012.T": "川崎重工",
+    "9107.T": "川崎汽船",
+    "8002.T": "丸紅",
 }
 
-WATCH_LIST = [
-    {"code": "8306", "name": "三菱UFJ"},
-    {"code": "6326", "name": "クボタ"},
-    {"code": "7269", "name": "スズキ"},
-    {"code": "7011", "name": "三菱重工"},
-    {"code": "7012", "name": "川崎重工"},
-    {"code": "9107", "name": "川崎汽船"},
-    {"code": "8002", "name": "丸紅"},
-    {"code": "1326", "name": "SPDRゴールド"},
-]
+# ==========================================
+# 現在の保有ポジション管理
+# ==========================================
+HOLDINGS = {
+    "9107": {
+        "side": "BUY",
+        "entry_price": 3500.40,
+        "shares": 200,
+        "stop_loss": 3490.0,
+        "target_profit": 3530.0,
+        "entry_date": "2026-09-17",
+    },
+    "7011": {
+        "side": "BUY",
+        "entry_price": 3891.40,
+        "shares": 100,
+        "stop_loss": 3830.0,
+        "target_profit": 3895.0,
+        "entry_date": "2026-09-18",
+    },
+}
 
-def analyze_stock(ticker_code, name):
-    try:
-        symbol = f"{ticker_code}.T"
-        df = yf.download(symbol, period="6mo", interval="1d", progress=False)
-        if df.empty:
-            return None
 
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+# ==========================================
+# 評価・スコアリング判定ロジック
+# ==========================================
+def evaluate_stock(df, code_clean):
+    curr = df.iloc[-1]
+    prev = df.iloc[-2]
 
-        df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy()
-        if len(df) < 25:
-            return None
+    c_open, c_close = float(curr["Open"]), float(curr["Close"])
+    c_high, c_low = float(curr["High"]), float(curr["Low"])
+    p_open, p_close = float(prev["Open"]), float(prev["Close"])
 
-        close = df['Close'].squeeze()
-        df['SMA5'] = close.rolling(window=5).mean()
-        df['SMA20'] = close.rolling(window=20).mean()
+    ma5, ma20 = float(curr["MA5"]), float(curr["MA20"])
+    p_ma5, p_ma20 = float(prev["MA5"]), float(prev["MA20"])
 
-        valid_df = df.dropna(subset=['SMA5', 'SMA20']).copy()
-        if len(valid_df) < 5:
-            return None
+    # 移動平均線の傾き (%)
+    ma5_slope = ((ma5 - p_ma5) / p_ma5) * 100 if p_ma5 > 0 else 0.0
+    ma20_slope = ((ma20 - p_ma20) / p_ma20) * 100 if p_ma20 > 0 else 0.0
 
-        valid_close = valid_df['Close'].squeeze()
-        curr_close = float(valid_close.iloc[-1])
-        prev_close = float(valid_close.iloc[-2])
-        sma5_curr = float(valid_df['SMA5'].iloc[-1])
-        sma5_prev = float(valid_df['SMA5'].iloc[-2])
-        sma20_curr = float(valid_df['SMA20'].iloc[-1])
+    is_ma5_up_or_flat = ma5 >= p_ma5
+    is_ma5_down_or_flat = ma5 <= p_ma5
+    is_ma20_up = ma20 >= p_ma20
+    is_ma20_down = ma20 <= p_ma20
 
-        is_holding = ticker_code in HOLDINGS
-        entry_info = HOLDINGS.get(ticker_code, {})
-        entry_price = entry_info.get("entry_price")
-        pos_type = entry_info.get("type", "buy")
+    # 20日線乖離率
+    bias_20 = ((c_close - ma20) / ma20) * 100 if ma20 > 0 else 0.0
+    bias_str = f"{bias_20:+.1f}%"
 
-        pnl_per_share = None
-        pnl_rate = None
+    candle_body_mid = (c_open + c_close) / 2.0
+    is_yang = c_close >= c_open
+    is_yin = c_close < c_open
 
-        if is_holding and entry_price:
-            if pos_type == "buy":
-                pnl_per_share = round(curr_close - entry_price, 2)
-                pnl_rate = round((pnl_per_share / entry_price) * 100, 2)
+    # 相場流：基本シグナル判定
+    is_shitahanshin = (
+        is_yang
+        and (candle_body_mid > ma5)
+        and (c_close > ma5)
+        and (p_close <= p_ma5 or (p_open + p_close) / 2.0 <= p_ma5)
+        and is_ma5_up_or_flat
+    )
+
+    is_gyaku_shitahanshin = (
+        is_yin
+        and (candle_body_mid < ma5)
+        and (c_close < ma5)
+        and (p_close >= p_ma5 or (p_open + p_close) / 2.0 >= p_ma5)
+        and is_ma5_down_or_flat
+    )
+
+    is_monowakare = (
+        (c_low <= ma20 * 1.015) and (c_close > ma20) and is_yang and is_ma20_up
+    )
+
+    # ----------------------------------------------------
+    # 1. 保有銘柄のエグジット判定（優先処理）
+    # ----------------------------------------------------
+    if code_clean in HOLDINGS:
+        h = HOLDINGS[code_clean]
+        side = h.get("side", "BUY")
+        entry_date = pd.to_datetime(h.get("entry_date", df.index[-1]))
+        candles_since_entry = int(len(df[df.index >= entry_date]))
+
+        if side == "BUY":
+            pnl = ((c_close - h["entry_price"]) / h["entry_price"]) * 100
+
+            if c_close <= h["stop_loss"] or c_low <= h["stop_loss"]:
+                return {
+                    "status": "ロスカット撤退",
+                    "badge": "EXIT",
+                    "bias": bias_str,
+                    "score": -99,
+                }
+            elif is_gyaku_shitahanshin:
+                return {
+                    "status": "手仕舞い(逆下半身)",
+                    "badge": "EXIT",
+                    "bias": bias_str,
+                    "score": -99,
+                }
+            elif c_close >= h["target_profit"]:
+                return {
+                    "status": "利確指値到達",
+                    "badge": "EXIT",
+                    "bias": bias_str,
+                    "score": -99,
+                }
+            elif candles_since_entry >= 14 and is_yin:
+                return {
+                    "status": f"手仕舞い(日柄{candles_since_entry}本・陰線)",
+                    "badge": "EXIT",
+                    "bias": bias_str,
+                    "score": -99,
+                }
             else:
-                pnl_per_share = round(entry_price - curr_close, 2)
-                pnl_rate = round((pnl_per_share / entry_price) * 100, 2)
+                return {
+                    "status": f"保有継続({pnl:+.1f}%/日柄{candles_since_entry}本)",
+                    "badge": "HOLD",
+                    "bias": bias_str,
+                    "score": 0,
+                }
 
-        recent_high = float(valid_close.tail(20).max())
-        recent_low = float(valid_close.tail(20).min())
+    # ----------------------------------------------------
+    # 2. 未保有銘柄のスコアリングロジック
+    # ----------------------------------------------------
+    score = 0
 
-        status = "待機"
-        tp_price = None
-        sl_price = None
+    # 【基本点】
+    if is_shitahanshin and is_monowakare:
+        score += 80
+        status = "下半身+ものわかれ(強買)"
+        badge = "BUY"
+    elif is_shitahanshin:
+        score += 50
+        status = "下半身(買い)"
+        badge = "BUY"
+    elif is_gyaku_shitahanshin:
+        score += 50
+        status = "逆下半身(空売り)"
+        badge = "SHORT"
+    elif is_monowakare:
+        score += 30
+        status = "ものわかれ初動"
+        badge = "BUY"
+    else:
+        return {"status": "様子見", "badge": "NONE", "bias": bias_str, "score": 0}
 
-        if is_holding:
-            if pos_type == "buy":
-                tp_price = recent_high
-                sl_price = round(entry_price * 0.975, 1)
-                if curr_close < sma5_curr and curr_close < prev_close:
-                    status = "手仕舞"
-                elif curr_close >= tp_price * 0.995:
-                    status = "高値警戒"
-                else:
-                    status = "継続保有"
-            else:
-                tp_price = recent_low
-                sl_price = round(entry_price * 1.025, 1)
-                if curr_close > sma5_curr and curr_close > prev_close:
-                    status = "返済買"
-                elif curr_close <= tp_price * 1.005:
-                    status = "底値警戒"
-                else:
-                    status = "空売保有"
-        else:
-            if curr_close > sma5_curr and sma5_curr > sma5_prev and curr_close > sma20_curr:
-                status = "下半身(買)"
-            elif curr_close < sma5_curr and sma5_curr < sma5_prev and curr_close < sma20_curr:
-                status = "逆下半身(空売)"
-            elif abs(curr_close - sma20_curr) / sma20_curr < 0.015:
-                status = "反発待"
+    # 【加点1：20日線の傾き（トレンドの向き）】最大+20点
+    if badge == "BUY" and is_ma20_up:
+        score += min(max(int(ma20_slope * 20), 0), 20)
+    elif badge == "SHORT" and is_ma20_down:
+        score += min(max(int(abs(ma20_slope) * 20), 0), 20)
 
-        plot_df = valid_df.tail(40).copy()
-        mc = mpf.make_marketcolors(up='#ff453a', down='#0a84ff', edge='inherit', wick='inherit', volume='in')
-        s = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#27272a', facecolor='#141416')
+    # 【加点2：実体比率（ローソク足の推進力）】最大+10点
+    high_low_range = c_high - c_low
+    body_range = abs(c_close - c_open)
+    body_ratio = (body_range / high_low_range) if high_low_range > 0 else 0.0
+    score += int(body_ratio * 10)
 
-        addplots = [
-            mpf.make_addplot(plot_df['SMA5'], color='#ff453a', width=1.5),
-            mpf.make_addplot(plot_df['SMA20'], color='#0a84ff', width=2.0)
-        ]
+    # 【減点：過熱感（20日線乖離率 8%超）】-15点
+    if abs(bias_20) > 8.0:
+        score -= 15
 
-        chart_filename = f"chart_{ticker_code}.png"
-
-        if is_holding and entry_price:
-            if pos_type == "buy":
-                h_lines = [tp_price, entry_price, sl_price]
-                h_colors = ['#bf5af2', '#ffd60a', '#ff9f0a']
-            else:
-                h_lines = [sl_price, entry_price, tp_price]
-                h_colors = ['#ff9f0a', '#ffd60a', '#bf5af2']
-            
-            mpf.plot(plot_df, type='candle', style=s, addplot=addplots,
-                     hlines=dict(hlines=h_lines, colors=h_colors, linestyle='--'),
-                     savefig=chart_filename, figsize=(7.2, 4.2), tight_layout=True)
-        else:
-            mpf.plot(plot_df, type='candle', style=s, addplot=addplots,
-                     savefig=chart_filename, figsize=(7.2, 4.2), tight_layout=True)
-
-        return {
-            "code": ticker_code,
-            "name": name,
-            "price": f"{int(curr_close):,}円" if not np.isnan(curr_close) else "---円",
-            "price_num": curr_close,
-            "status": status,
-            "is_holding": is_holding,
-            "pos_type": pos_type if is_holding else None,
-            "entry_price": entry_price,
-            "pnl_per_share": pnl_per_share,
-            "pnl_rate": pnl_rate,
-            "chart_file": chart_filename
-        }
-    except Exception as e:
-        print(f"Error processing {ticker_code}: {e}")
-        return None
-
-def main():
-    results = []
-    for item in WATCH_LIST:
-        data = analyze_stock(item["code"], item["name"])
-        if data:
-            results.append(data)
-
-    # 日本時間 (JST: UTC+9) で現在時刻を記録
-    jst = datetime.timezone(datetime.timedelta(hours=9))
-    output = {
-        "updated_at": datetime.datetime.now(jst).strftime("%m/%d %H:%M JST"),
-        "stocks": results
+    return {
+        "status": status,
+        "badge": badge,
+        "bias": bias_str,
+        "score": int(score),
     }
 
-    with open("result.json", "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
 
-    if os.path.exists("chart_8306.png"):
-        shutil.copy("chart_8306.png", "chart.png")
-    elif results and os.path.exists(results[0]["chart_file"]):
-        shutil.copy(results[0]["chart_file"], "chart.png")
+# ==========================================
+# メイン処理（データ取得・ソート・JSON保存）
+# ==========================================
+def main():
+    now_jst = datetime.now(JST).strftime("%m/%d %H:%M JST")
+    stock_results = []
+
+    for symbol, name in UNIVERSE.items():
+        code_clean = symbol.replace(".T", "")
+        try:
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="6mo")
+        except Exception as e:
+            print(f"データ取得エラー ({symbol}): {e}")
+            continue
+
+        if df.empty or len(df) < 25:
+            continue
+
+        # 移動平均線
+        df["MA5"] = df["Close"].rolling(5).mean()
+        df["MA20"] = df["Close"].rolling(20).mean()
+
+        res = evaluate_stock(df, code_clean)
+        c_price = float(df.iloc[-1]["Close"])
+        price_str = (
+            f"{c_price:,.1f}円" if c_price < 1000 else f"{int(c_price):,}円"
+        )
+
+        stock_results.append(
+            {
+                "code": code_clean,
+                "name": name,
+                "price": price_str,
+                "raw_price": c_price,
+                "bias": res["bias"],
+                "status": res["status"],
+                "badge": res["badge"],
+                "score": res["score"],
+            }
+        )
+
+    # ----------------------------------------------------
+    # 並び替え：シグナル成立(BUY/SHORT)を上位に、スコア降順でソート
+    # ----------------------------------------------------
+    stock_results.sort(
+        key=lambda x: (
+            x["badge"] in ["BUY", "SHORT"],
+            x["score"],
+            -x["raw_price"],
+        ),
+        reverse=True,
+    )
+
+    top_stock = stock_results[0] if stock_results else None
+
+    output_data = {
+        "updated_at": now_jst,
+        "top_stock": top_stock,
+        "stocks": stock_results,
+    }
+
+    output_path = "result.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+    print(f"[{now_jst}] 判定完了 -> result.json を出力しました。")
+    if top_stock:
+        print(
+            f"★ 最優先銘柄: {top_stock['name']} ({top_stock['code']}) | 判定: {top_stock['status']} | スコア: {top_stock['score']}点"
+        )
+
 
 if __name__ == "__main__":
     main()
