@@ -1,42 +1,69 @@
-import japanize_matplotlib
-import matplotlib.pyplot as plt
+import json
+import os
+import sys
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
 # ==========================================
-# 1. 検証設定（150万円予算・厳選4銘柄）
+# 1. 運用パラメータ設定（150万円・エリート6銘柄）
 # ==========================================
-INITIAL_CAPITAL = 1500000  # 予算150万円
+MAX_HOLDINGS = 2  # 同時保有上限枠（最大2銘柄）
+INITIAL_SHARES = 100  # 初動打診エントリー株数
+MIN_SCORE = 50  # エントリー最低スコア
+PYRAMID_SCORE = 70  # 増し玉対象スコア
 
-UNIVERSE = {
-    "8306.T": "三菱UFJ",
-    "8002.T": "丸紅",
-    "9107.T": "川崎汽船",
-    "7012.T": "川崎重工",
+# 監視対象ユニバース（目標ロット設計済み）
+WATCH_UNIVERSE = {
+    "8306.T": {
+        "name": "三菱UFJ",
+        "target_shares": 300,
+        "sector": "メガバンク",
+    },
+    "7182.T": {
+        "name": "ゆうちょ銀行",
+        "target_shares": 500,
+        "sector": "国策金融",
+    },
+    "8393.T": {
+        "name": "宮崎銀行",
+        "target_shares": 200,
+        "sector": "地方銀行",
+    },
+    "8058.T": {
+        "name": "三菱商事",
+        "target_shares": 300,
+        "sector": "総合商社",
+    },
+    "6981.T": {
+        "name": "村田製作所",
+        "target_shares": 300,
+        "sector": "電子部品",
+    },
+    "4502.T": {
+        "name": "武田薬品",
+        "target_shares": 200,
+        "sector": "医薬品",
+    },
 }
 
-MIN_SCORE = 50
-
-
-# スコア連動ロット設定（株価帯を考慮し、建玉70万〜100万円規模に調整）
-def get_trade_shares(symbol, score):
-  if score >= 70:
-    if "7012" in symbol:  # 川崎重工（株価2,400円前後）
-      return 300
-    else:  # 三菱UFJ, 川崎汽船, 丸紅（株価3,500〜5,000円前後）
-      return 200
-  else:
-    return 100  # 通常シグナル（50〜69点）は一律100株打診
+# ==========================================
+# 2. 現在の保有状況管理（木曜決済後は空 {} で待機）
+# ==========================================
+# 保有が発生した場合は以下のように更新:
+# "8306.T": {"side": "BUY", "shares": 100, "entry_price": 1850.0, "pyramided": False, "score": 80, "hold_days": 1}
+HOLDINGS = {}
 
 
 # ==========================================
-# 2. 相場流判定ロジック（20MA順張り＋安全空売り）
+# 3. 相場流テクニカル判定ロジック
 # ==========================================
-def evaluate_bar(df_slice):
-  if len(df_slice) < 25:
-    return None, 0
-  curr, prev = df_slice.iloc[-1], df_slice.iloc[-2]
+def evaluate_stock(df):
+  if len(df) < 25:
+    return None, 0, {}
+
+  curr = df.iloc[-1]
+  prev = df.iloc[-2]
 
   c_open, c_close = curr["Open"], curr["Close"]
   c_high, c_low = curr["High"], curr["Low"]
@@ -45,7 +72,7 @@ def evaluate_bar(df_slice):
   p_ma5, p_ma20 = prev["MA5"], prev["MA20"]
 
   if np.isnan(ma5) or np.isnan(ma20) or np.isnan(p_ma5) or np.isnan(p_ma20):
-    return None, 0
+    return None, 0, {}
 
   ma5_slope = ((ma5 - p_ma5) / p_ma5) * 100 if p_ma5 > 0 else 0.0
   ma20_slope = ((ma20 - p_ma20) / p_ma20) * 100 if p_ma20 > 0 else 0.0
@@ -54,6 +81,7 @@ def evaluate_bar(df_slice):
   is_yang = c_close >= c_open
   is_yin = c_close < c_open
 
+  # 下半身（買い）
   is_shitahanshin = (
       is_yang
       and (candle_body_mid > ma5)
@@ -62,6 +90,7 @@ def evaluate_bar(df_slice):
       and (ma5 >= p_ma5)
   )
 
+  # 逆下半身（空売り）
   is_gyaku_shitahanshin = (
       is_yin
       and (candle_body_mid < ma5)
@@ -70,6 +99,7 @@ def evaluate_bar(df_slice):
       and (ma5 <= p_ma5)
   )
 
+  # ものわかれ
   is_monowakare = (
       (c_low <= ma20 * 1.015)
       and (c_close > ma20)
@@ -80,12 +110,9 @@ def evaluate_bar(df_slice):
   signal = None
   score = 0
 
-  # 買い：20MA上向き＋株価20MA以上
   if is_shitahanshin and (ma20 >= p_ma20) and (c_close >= ma20):
     signal = "BUY"
     score = 80 if is_monowakare else 50
-
-  # 売り：20MA下向き＋株価20MA以下＋乖離安全圏
   elif (
       is_gyaku_shitahanshin
       and (ma20 <= p_ma20)
@@ -96,9 +123,9 @@ def evaluate_bar(df_slice):
     score = 50
 
   if signal is None:
-    return None, 0
+    return None, 0, {"ma5": ma5, "ma20": ma20, "bias_20": bias_20}
 
-  # 加点
+  # 加点・減点
   if signal == "BUY":
     score += min(max(int(ma20_slope * 20), 0), 20)
   elif signal == "SHORT":
@@ -111,161 +138,148 @@ def evaluate_bar(df_slice):
   if abs(bias_20) > 8.0:
     score -= 15
 
-  return signal, score
+  return signal, score, {"ma5": ma5, "ma20": ma20, "bias_20": bias_20}
 
 
 # ==========================================
-# 3. バックテスト集計処理
+# 4. メイン監視実行ループ
 # ==========================================
-all_trades = []
+def main():
+  print("=" * 65)
+  print("【相場流・エリート6銘柄 本番運用監視シグナル】")
+  print(
+      f" 運用資金枠: 150万円 | 同時保有上限: {MAX_HOLDINGS}枠 | 現在保有:"
+      f" {len(HOLDINGS)}枠"
+  )
+  print("=" * 65)
 
-for symbol, name in UNIVERSE.items():
-  ticker = yf.Ticker(symbol)
-  df = ticker.history(period="1y")
-  if df.empty or len(df) < 50:
-    continue
-  if df.index.tz is not None:
-    df.index = df.index.tz_localize(None)
+  data_map = {}
+  for sym in WATCH_UNIVERSE:
+    try:
+      t = yf.Ticker(sym)
+      df = t.history(period="3mo")
+      if df.empty or len(df) < 25:
+        continue
+      if df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
+      df["MA5"] = df["Close"].rolling(5).mean()
+      df["MA20"] = df["Close"].rolling(20).mean()
+      data_map[sym] = df
+    except Exception as e:
+      print(f"データ取得エラー ({sym}): {e}")
 
-  df["MA5"] = df["Close"].rolling(5).mean()
-  df["MA20"] = df["Close"].rolling(20).mean()
+  # --- A. 保有銘柄の決済・増し玉判定 ---
+  if HOLDINGS:
+    print("\n▼ 【保有銘柄 ステータス＆アクション】")
+    print("-" * 65)
+    for sym, pos in HOLDINGS.items():
+      if sym not in data_map:
+        continue
+      df = data_map[sym]
+      curr = df.iloc[-1]
+      info = WATCH_UNIVERSE[sym]
+      c_close, c_open, ma5 = curr["Close"], curr["Open"], curr["MA5"]
+      hold_days = pos.get("hold_days", 1)
 
-  position = None
-  for i in range(25, len(df) - 1):
-    df_slice = df.iloc[: i + 1]
-    curr_bar, next_bar = df.iloc[i], df.iloc[i + 1]
-
-    # 手仕舞い判定
-    if position is not None:
-      hold_days = i - position["entry_idx"]
-      entry_p = position["entry_price"]
-      c_close = curr_bar["Close"]
-      c_open = curr_bar["Open"]
-      shares = position["shares"]
-
-      exit_reason = None
-      if position["side"] == "BUY":
-        if (c_close < curr_bar["MA5"]) and (c_close < c_open):
-          exit_reason = "5MA割れ陰線"
+      exit_signal = None
+      if pos["side"] == "BUY":
+        if (c_close < ma5) and (c_close < c_open):
+          exit_signal = "5MA割れ陰線（手仕舞い推奨）"
         elif hold_days >= 10:
-          exit_reason = "日柄手仕舞(10日)"
-
-      elif position["side"] == "SHORT":
-        if (c_close > curr_bar["MA5"]) and (c_close >= c_open):
-          exit_reason = "5MA超え陽線"
+          exit_signal = "日柄10本到達（手仕舞い推奨）"
+      elif pos["side"] == "SHORT":
+        if (c_close > ma5) and (c_close >= c_open):
+          exit_signal = "5MA超え陽線（手仕舞い推奨）"
         elif hold_days >= 10:
-          exit_reason = "日柄手仕舞(10日)"
+          exit_signal = "日柄10本到達（手仕舞い推奨）"
 
-      if exit_reason:
-        exit_p = next_bar["Open"]
-        pnl = (
-            (exit_p - entry_p) * shares
-            if position["side"] == "BUY"
-            else (entry_p - exit_p) * shares
-        )
-        all_trades.append({
-            "name": name,
-            "side": position["side"],
-            "score": position["score"],
-            "shares": shares,
-            "exit_date": next_bar.name,
-            "pnl": int(pnl),
-            "reason": exit_reason,
-        })
-        position = None
+      if exit_signal:
+        print(f"■ 【手仕舞い】{info['name']} ({sym})")
+        print(f"   理由: {exit_signal} | 翌朝寄り付きで全株成行決済")
         continue
 
-    # 新規エントリー
-    if position is None:
-      sig, score = evaluate_bar(df_slice)
-      if sig in ["BUY", "SHORT"] and score >= MIN_SCORE:
-        shares = get_trade_shares(symbol, score)
-        position = {
-            "side": sig,
-            "shares": shares,
-            "score": score,
-            "entry_price": next_bar["Open"],
-            "entry_idx": i + 1,
-            "entry_date": next_bar.name,
-        }
+      # 増し玉チェック
+      if not pos.get("pyramided", False):
+        can_pyramid = False
+        if (
+            pos["side"] == "BUY"
+            and (c_close >= c_open)
+            and (c_close > ma5)
+            and pos.get("score", 0) >= PYRAMID_SCORE
+        ):
+          can_pyramid = True
+        elif (
+            pos["side"] == "SHORT"
+            and (c_close <= c_open)
+            and (c_close < ma5)
+            and pos.get("score", 0) >= PYRAMID_SCORE
+        ):
+          can_pyramid = True
 
-# ==========================================
-# 4. 結果レポート出力
-# ==========================================
-if all_trades:
-  trade_df = pd.DataFrame(all_trades).sort_values("exit_date")
-  trade_df["cum_pnl"] = trade_df["pnl"].cumsum()
+        if can_pyramid:
+          add_qty = info["target_shares"] - pos["shares"]
+          print(f"★ 【増し玉推奨】{info['name']} ({sym})")
+          print(f"   状態: 5日線上を陽線キープ（波に乗った本命展開）")
+          print(
+              f"   発注: 翌朝寄り付きで +{add_qty}株 追加（計"
+              f" {info['target_shares']}株へ増量）"
+          )
+        else:
+          print(
+              f"● 【キープ】{info['name']} ({sym}): 打診{pos['shares']}株のまま継続"
+          )
+      else:
+        print(
+            f"● 【フル保有中】{info['name']} ({sym}):"
+            f" {pos['shares']}株（利大伸ばし中）"
+        )
 
-  wins = trade_df[trade_df["pnl"] > 0]
-  losses = trade_df[trade_df["pnl"] <= 0]
-  win_rate = (len(wins) / len(trade_df)) * 100
-  total_pnl = trade_df["pnl"].sum()
-  annual_yield = (total_pnl / INITIAL_CAPITAL) * 100
-  pf = (
-      wins["pnl"].sum() / abs(losses["pnl"].sum())
-      if len(losses) > 0
-      else float("inf")
-  )
+  # --- B. 新規エントリー候補選抜 ---
+  available_slots = MAX_HOLDINGS - len(HOLDINGS)
+  print(f"\n▼ 【監視銘柄シグナルスキャン】(空き枠: {available_slots}枠)")
+  print("-" * 65)
 
-  buys = trade_df[trade_df["side"] == "BUY"]
-  shorts = trade_df[trade_df["side"] == "SHORT"]
+  candidates = []
+  for sym, info in WATCH_UNIVERSE.items():
+    if sym in HOLDINGS or sym not in data_map:
+      continue
+    df = data_map[sym]
+    sig, score, meta = evaluate_stock(df)
+    last_p = df.iloc[-1]["Close"]
 
-  high_score_trades = trade_df[trade_df["score"] >= 70]
+    status_str = f"スコア: {score:>2}点 | 終値: {last_p:>6.0f}円"
+    if sig:
+      status_str += f" | シグナル: {sig}"
+      if score >= MIN_SCORE:
+        candidates.append((sym, sig, score, last_p))
+    else:
+      status_str += " | シグナル: なし"
+    print(f" {info['name']:<8} ({sym}): {status_str}")
 
-  print("==================================================")
-  print(f"【予算150万円・ロット可変モデル実績】")
-  print(f" 取引数: {len(trade_df)}回 | 勝率: {win_rate:.1f}% | PF: {pf:.2f}")
-  print(f" 年間総損益: {total_pnl:+d} 円")
-  print(f" 年利換算:   {annual_yield:+.1f} % (予算150万円基準)")
-  print("--------------------------------------------------")
-  print(
-      f" └ 高得点勝負玉 (70点以上/200-300株): {len(high_score_trades)}回中"
-      f" {len(high_score_trades[high_score_trades['pnl']>0])}勝 | 損益:"
-      f" {high_score_trades['pnl'].sum():+d}円"
-  )
-  if len(buys) > 0:
-    print(
-        f" └ 買い損益: {buys['pnl'].sum():+d}円 (勝率"
-        f" {len(buys[buys['pnl']>0])/len(buys)*100:.1f}%)"
-    )
-  if len(shorts) > 0:
-    print(
-        f" └ 売り損益: {shorts['pnl'].sum():+d}円 (勝率"
-        f" {len(shorts[shorts['pnl']>0])/len(shorts)*100:.1f}%)"
-    )
-  print("==================================================\n")
+  # スコア順にソートして選抜発注の指示
+  candidates.sort(key=lambda x: x[2], reverse=True)
 
-  # 銘柄別ランキング
-  print("【銘柄別 パフォーマンス内訳】")
-  print(
-      f"{'銘柄名':<10} {'取引数':>6} {'勝率':>8} {'総損益(円)':>14} {'PF':>6}"
-  )
-  print("-" * 50)
-  for name, grp in trade_df.groupby("name"):
-    g_win = grp[grp["pnl"] > 0]
-    g_loss = grp[grp["pnl"] <= 0]
-    g_rate = (len(g_win) / len(grp)) * 100
-    g_pnl = grp["pnl"].sum()
-    g_pf = (
-        (g_win["pnl"].sum() / abs(g_loss["pnl"].sum()))
-        if len(g_loss) > 0 and g_loss["pnl"].sum() != 0
-        else 9.99
-    )
-    print(
-        f"{name:<10} {len(grp):>6}回 {g_rate:>7.1f}% {g_pnl:>+14,d}円 {g_pf:>6.2f}"
-    )
-  print("==================================================")
+  print("\n" + "=" * 65)
+  print("【明日の実戦発注アクション】")
+  print("=" * 65)
+  if available_slots <= 0:
+    print("現在、保有上限枠（2銘柄）に達しているため新規発注は見送ります。")
+  elif not candidates:
+    print("現在、50点以上のエントリーシグナルは点灯していません（待機）。")
+  else:
+    selected = candidates[:available_slots]
+    for sym, sig, score, last_p in selected:
+      info = WATCH_UNIVERSE[sym]
+      action_type = "現物買い/信用買い" if sig == "BUY" else "信用新規売り"
+      print(f"★ 【新規打診エントリー】: {info['name']} ({sym})")
+      print(f"   スコア: {score}点 ({info['sector']})")
+      print(f"   発注: 翌朝寄り付き成行で 『{INITIAL_SHARES}株』 {action_type}")
+      print(
+          f"   増し玉目安: 明日も5MAキープなら +{info['target_shares'] - 100}株"
+          f" 追加予定（目標計{info['target_shares']}株）"
+      )
+      print("-" * 65)
 
-  # チャート描画
-  plt.figure(figsize=(10, 4.5))
-  plt.plot(
-      trade_df["exit_date"],
-      trade_df["cum_pnl"],
-      marker=".",
-      color="#0a84ff",
-      linewidth=2,
-  )
-  plt.title("【予算150万・ロット可変レバレッジ】過去1年 累積損益推移 (円)")
-  plt.grid(True, linestyle=":", alpha=0.6)
-  plt.ylabel("累積損益 (円)")
-  plt.show()
+
+if __name__ == "__main__":
+  main()
