@@ -1,357 +1,271 @@
-from datetime import datetime
-import json
-import os
-import shutil
-import matplotlib
-
-matplotlib.use("Agg")  # GitHub Actions(Linux)用ヘッドレス描画設定
-import matplotlib.dates as mdates
+import japanize_matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pytz
 import yfinance as yf
 
-JST = pytz.timezone("Asia/Tokyo")
+# ==========================================
+# 1. 検証設定（150万円予算・厳選4銘柄）
+# ==========================================
+INITIAL_CAPITAL = 1500000  # 予算150万円
 
-# ==========================================
-# 1. 監視対象銘柄リスト（バックテスト検証済みの厳選銘柄）
-# ==========================================
 UNIVERSE = {
     "8306.T": "三菱UFJ",
     "8002.T": "丸紅",
     "9107.T": "川崎汽船",
     "7012.T": "川崎重工",
-    "7011.T": "三菱重工",  # ※木曜日の手仕舞い完了まで監視維持
 }
 
-# ==========================================
-# 2. 現在の保有ポジション管理
-# ==========================================
-HOLDINGS = {
-    "9107": {
-        "name": "川崎汽船",
-        "side": "buy",
-        "entry_price": 3500.40,
-        "shares": 200,
-        "stop_loss": 3490.0,
-        "target_profit": 3530.0,
-        "entry_date": "2026-09-17",
-    },
-    "7011": {
-        "name": "三菱重工",
-        "side": "buy",
-        "entry_price": 3891.40,
-        "shares": 100,
-        "stop_loss": 3830.0,
-        "target_profit": 3895.0,
-        "entry_date": "2026-09-18",
-    },
-}
+MIN_SCORE = 50
+
+
+# スコア連動ロット設定（株価帯を考慮し、建玉70万〜100万円規模に調整）
+def get_trade_shares(symbol, score):
+  if score >= 70:
+    if "7012" in symbol:  # 川崎重工（株価2,400円前後）
+      return 300
+    else:  # 三菱UFJ, 川崎汽船, 丸紅（株価3,500〜5,000円前後）
+      return 200
+  else:
+    return 100  # 通常シグナル（50〜69点）は一律100株打診
 
 
 # ==========================================
-# 3. 相場流・高精度判定 & スコアリング
+# 2. 相場流判定ロジック（20MA順張り＋安全空売り）
 # ==========================================
-def evaluate_stock(df, code_clean):
-    curr = df.iloc[-1]
-    prev = df.iloc[-2]
+def evaluate_bar(df_slice):
+  if len(df_slice) < 25:
+    return None, 0
+  curr, prev = df_slice.iloc[-1], df_slice.iloc[-2]
 
-    c_open, c_close = float(curr["Open"]), float(curr["Close"])
-    c_high, c_low = float(curr["High"]), float(curr["Low"])
-    p_open, p_close = float(prev["Open"]), float(prev["Close"])
+  c_open, c_close = curr["Open"], curr["Close"]
+  c_high, c_low = curr["High"], curr["Low"]
+  p_open, p_close = prev["Open"], prev["Close"]
+  ma5, ma20 = curr["MA5"], curr["MA20"]
+  p_ma5, p_ma20 = prev["MA5"], prev["MA20"]
 
-    ma5, ma20 = float(curr["MA5"]), float(curr["MA20"])
-    p_ma5, p_ma20 = float(prev["MA5"]), float(prev["MA20"])
+  if np.isnan(ma5) or np.isnan(ma20) or np.isnan(p_ma5) or np.isnan(p_ma20):
+    return None, 0
 
-    # 移動平均線の傾き (%)
-    ma5_slope = ((ma5 - p_ma5) / p_ma5) * 100 if p_ma5 > 0 else 0.0
-    ma20_slope = ((ma20 - p_ma20) / p_ma20) * 100 if p_ma20 > 0 else 0.0
+  ma5_slope = ((ma5 - p_ma5) / p_ma5) * 100 if p_ma5 > 0 else 0.0
+  ma20_slope = ((ma20 - p_ma20) / p_ma20) * 100 if p_ma20 > 0 else 0.0
+  bias_20 = ((c_close - ma20) / ma20) * 100 if ma20 > 0 else 0.0
+  candle_body_mid = (c_open + c_close) / 2.0
+  is_yang = c_close >= c_open
+  is_yin = c_close < c_open
 
-    is_ma5_up_or_flat = ma5 >= p_ma5
-    is_ma5_down_or_flat = ma5 <= p_ma5
-    is_ma20_up = ma20 >= p_ma20
-    is_ma20_down = ma20 <= p_ma20
+  is_shitahanshin = (
+      is_yang
+      and (candle_body_mid > ma5)
+      and (c_close > ma5)
+      and (p_close <= p_ma5)
+      and (ma5 >= p_ma5)
+  )
 
-    # 20日線乖離率
-    bias_20 = ((c_close - ma20) / ma20) * 100 if ma20 > 0 else 0.0
-    bias_str = f"{bias_20:+.1f}%"
+  is_gyaku_shitahanshin = (
+      is_yin
+      and (candle_body_mid < ma5)
+      and (c_close < ma5)
+      and (p_close >= p_ma5)
+      and (ma5 <= p_ma5)
+  )
 
-    candle_body_mid = (c_open + c_close) / 2.0
-    is_yang = c_close >= c_open
-    is_yin = c_close < c_open
+  is_monowakare = (
+      (c_low <= ma20 * 1.015)
+      and (c_close > ma20)
+      and is_yang
+      and (ma20 >= p_ma20)
+  )
 
-    # 相場流：初動シグナル
-    is_shitahanshin = (
-        is_yang
-        and (candle_body_mid > ma5)
-        and (c_close > ma5)
-        and (p_close <= p_ma5)
-        and is_ma5_up_or_flat
-    )
+  signal = None
+  score = 0
 
-    is_gyaku_shitahanshin = (
-        is_yin
-        and (candle_body_mid < ma5)
-        and (c_close < ma5)
-        and (p_close >= p_ma5)
-        and is_ma5_down_or_flat
-    )
+  # 買い：20MA上向き＋株価20MA以上
+  if is_shitahanshin and (ma20 >= p_ma20) and (c_close >= ma20):
+    signal = "BUY"
+    score = 80 if is_monowakare else 50
 
-    is_monowakare = (
-        (c_low <= ma20 * 1.015) and (c_close > ma20) and is_yang and is_ma20_up
-    )
+  # 売り：20MA下向き＋株価20MA以下＋乖離安全圏
+  elif (
+      is_gyaku_shitahanshin
+      and (ma20 <= p_ma20)
+      and (c_close <= ma20)
+      and (bias_20 > -5.0)
+  ):
+    signal = "SHORT"
+    score = 50
 
-    # ----------------------------------------------------
-    # A. 保有ポジションのエグジット判定
-    # ----------------------------------------------------
-    if code_clean in HOLDINGS:
-        h = HOLDINGS[code_clean]
-        pos_type = h.get("side", "buy")
-        entry_price = float(h.get("entry_price", c_close))
+  if signal is None:
+    return None, 0
 
-        raw_date = h.get("entry_date", df.index[-1])
-        entry_date = pd.to_datetime(raw_date)
-        if entry_date.tzinfo is not None:
-            entry_date = entry_date.tz_localize(None)
+  # 加点
+  if signal == "BUY":
+    score += min(max(int(ma20_slope * 20), 0), 20)
+  elif signal == "SHORT":
+    score += min(max(int(abs(ma20_slope) * 20), 0), 20)
 
-        candles_since_entry = int(len(df[df.index >= entry_date]))
-        pnl = ((c_close - entry_price) / entry_price) * 100
+  hl_range = c_high - c_low
+  if hl_range > 0:
+    score += int((abs(c_close - c_open) / hl_range) * 10)
 
-        # 手仕舞い判定（利確指値・損切り・相場流手仕舞い）
-        if c_close >= h["target_profit"] or c_high >= h["target_profit"]:
-            status = "手仕舞(利確指値)"
-            badge = "EXIT"
-        elif c_close <= h["stop_loss"] or c_low <= h["stop_loss"]:
-            status = "手仕舞(ロスカット)"
-            badge = "EXIT"
-        elif (c_close < ma5) and is_yin:
-            status = "手仕舞(5MA割れ陰線)"
-            badge = "EXIT"
-        elif candles_since_entry >= 10 and is_yin:
-            status = f"手仕舞(日柄{candles_since_entry}本)"
-            badge = "EXIT"
-        else:
-            status = f"保有中({pnl:+.1f}%)"
-            badge = "HOLD"
+  if abs(bias_20) > 8.0:
+    score -= 15
 
-        return {
-            "status": status,
-            "badge": badge,
-            "bias": bias_str,
-            "score": 0,
-            "is_holding": True,
-            "pos_type": pos_type,
-            "entry_price": entry_price,
+  return signal, score
+
+
+# ==========================================
+# 3. バックテスト集計処理
+# ==========================================
+all_trades = []
+
+for symbol, name in UNIVERSE.items():
+  ticker = yf.Ticker(symbol)
+  df = ticker.history(period="1y")
+  if df.empty or len(df) < 50:
+    continue
+  if df.index.tz is not None:
+    df.index = df.index.tz_localize(None)
+
+  df["MA5"] = df["Close"].rolling(5).mean()
+  df["MA20"] = df["Close"].rolling(20).mean()
+
+  position = None
+  for i in range(25, len(df) - 1):
+    df_slice = df.iloc[: i + 1]
+    curr_bar, next_bar = df.iloc[i], df.iloc[i + 1]
+
+    # 手仕舞い判定
+    if position is not None:
+      hold_days = i - position["entry_idx"]
+      entry_p = position["entry_price"]
+      c_close = curr_bar["Close"]
+      c_open = curr_bar["Open"]
+      shares = position["shares"]
+
+      exit_reason = None
+      if position["side"] == "BUY":
+        if (c_close < curr_bar["MA5"]) and (c_close < c_open):
+          exit_reason = "5MA割れ陰線"
+        elif hold_days >= 10:
+          exit_reason = "日柄手仕舞(10日)"
+
+      elif position["side"] == "SHORT":
+        if (c_close > curr_bar["MA5"]) and (c_close >= c_open):
+          exit_reason = "5MA超え陽線"
+        elif hold_days >= 10:
+          exit_reason = "日柄手仕舞(10日)"
+
+      if exit_reason:
+        exit_p = next_bar["Open"]
+        pnl = (
+            (exit_p - entry_p) * shares
+            if position["side"] == "BUY"
+            else (entry_p - exit_p) * shares
+        )
+        all_trades.append({
+            "name": name,
+            "side": position["side"],
+            "score": position["score"],
+            "shares": shares,
+            "exit_date": next_bar.name,
+            "pnl": int(pnl),
+            "reason": exit_reason,
+        })
+        position = None
+        continue
+
+    # 新規エントリー
+    if position is None:
+      sig, score = evaluate_bar(df_slice)
+      if sig in ["BUY", "SHORT"] and score >= MIN_SCORE:
+        shares = get_trade_shares(symbol, score)
+        position = {
+            "side": sig,
+            "shares": shares,
+            "score": score,
+            "entry_price": next_bar["Open"],
+            "entry_idx": i + 1,
+            "entry_date": next_bar.name,
         }
 
-    # ----------------------------------------------------
-    # B. 未保有銘柄の判定（20MA順張り・安全フィルター準拠）
-    # ----------------------------------------------------
-    score = 0
-    status = "待機"
-    badge = "NONE"
-
-    # 【買い条件】20MA上向き ＋ 株価が20MA以上 ＋ 初動下半身
-    if is_shitahanshin and is_ma20_up and (c_close >= ma20):
-        if is_monowakare:
-            score = 80
-            status = "下半身+ものわかれ(現買)"
-        else:
-            score = 50
-            status = "下半身(現買)"
-        badge = "BUY"
-
-    # 【空売り条件】20MA下向き ＋ 株価が20MA以下 ＋ 乖離-5%以内の安全初動
-    elif (
-        is_gyaku_shitahanshin
-        and is_ma20_down
-        and (c_close <= ma20)
-        and (bias_20 > -5.0)
-    ):
-        score = 50
-        status = "逆下半身(空売)"
-        badge = "SHORT"
-
-    # 有効シグナル時のみ加減点を計算
-    if badge != "NONE":
-        # 傾き加点（最大+20点）
-        if badge == "BUY":
-            score += min(max(int(ma20_slope * 20), 0), 20)
-        elif badge == "SHORT":
-            score += min(max(int(abs(ma20_slope) * 20), 0), 20)
-
-        # 実体推進力加点（最大+10点）
-        hl_range = c_high - c_low
-        if hl_range > 0:
-            body_ratio = abs(c_close - c_open) / hl_range
-            score += int(body_ratio * 10)
-
-        # 乖離過熱ペナルティ
-        if abs(bias_20) > 8.0:
-            score -= 15
-
-    return {
-        "status": status,
-        "badge": badge,
-        "bias": bias_str,
-        "score": int(score),
-        "is_holding": False,
-        "pos_type": None,
-        "entry_price": None,
-    }
-
-
 # ==========================================
-# 4. チャート画像生成（文字化け防止版）
+# 4. 結果レポート出力
 # ==========================================
-def generate_chart(df, code, output_path):
-    plot_df = df.tail(40).copy()
+if all_trades:
+  trade_df = pd.DataFrame(all_trades).sort_values("exit_date")
+  trade_df["cum_pnl"] = trade_df["pnl"].cumsum()
 
-    fig, ax = plt.subplots(figsize=(6, 3.2), facecolor="#141414")
-    ax.set_facecolor("#141414")
-    ax.grid(True, linestyle=":", alpha=0.3, color="#555555")
+  wins = trade_df[trade_df["pnl"] > 0]
+  losses = trade_df[trade_df["pnl"] <= 0]
+  win_rate = (len(wins) / len(trade_df)) * 100
+  total_pnl = trade_df["pnl"].sum()
+  annual_yield = (total_pnl / INITIAL_CAPITAL) * 100
+  pf = (
+      wins["pnl"].sum() / abs(losses["pnl"].sum())
+      if len(losses) > 0
+      else float("inf")
+  )
 
-    # 5日線（赤） / 20日線（青）
-    ax.plot(
-        plot_df.index,
-        plot_df["MA5"],
-        color="#ff4444",
-        linewidth=1.8,
-        label="5MA",
-        alpha=0.9,
+  buys = trade_df[trade_df["side"] == "BUY"]
+  shorts = trade_df[trade_df["side"] == "SHORT"]
+
+  high_score_trades = trade_df[trade_df["score"] >= 70]
+
+  print("==================================================")
+  print(f"【予算150万円・ロット可変モデル実績】")
+  print(f" 取引数: {len(trade_df)}回 | 勝率: {win_rate:.1f}% | PF: {pf:.2f}")
+  print(f" 年間総損益: {total_pnl:+d} 円")
+  print(f" 年利換算:   {annual_yield:+.1f} % (予算150万円基準)")
+  print("--------------------------------------------------")
+  print(
+      f" └ 高得点勝負玉 (70点以上/200-300株): {len(high_score_trades)}回中"
+      f" {len(high_score_trades[high_score_trades['pnl']>0])}勝 | 損益:"
+      f" {high_score_trades['pnl'].sum():+d}円"
+  )
+  if len(buys) > 0:
+    print(
+        f" └ 買い損益: {buys['pnl'].sum():+d}円 (勝率"
+        f" {len(buys[buys['pnl']>0])/len(buys)*100:.1f}%)"
     )
-    ax.plot(
-        plot_df.index,
-        plot_df["MA20"],
-        color="#3399ff",
-        linewidth=1.8,
-        label="20MA",
-        alpha=0.9,
+  if len(shorts) > 0:
+    print(
+        f" └ 売り損益: {shorts['pnl'].sum():+d}円 (勝率"
+        f" {len(shorts[shorts['pnl']>0])/len(shorts)*100:.1f}%)"
     )
+  print("==================================================\n")
 
-    # ローソク足
-    width = 0.6
-    for idx, row in plot_df.iterrows():
-        o, c, h, l = row["Open"], row["Close"], row["High"], row["Low"]
-        color = "#ff4444" if c >= o else "#3399ff"
-        ax.vlines(idx, l, h, color=color, linewidth=1.0, alpha=0.8)
-        lower = min(o, c)
-        height = max(abs(c - o), 0.5)
-        ax.bar(
-            idx,
-            height,
-            bottom=lower,
-            color=color,
-            width=width,
-            align="center",
-            alpha=0.9,
-        )
-
-    # 直近高値ライン（黄色破線）
-    ax.axhline(
-        plot_df["High"].max(),
-        color="#f1c40f",
-        linestyle="--",
-        linewidth=1.0,
-        alpha=0.7,
+  # 銘柄別ランキング
+  print("【銘柄別 パフォーマンス内訳】")
+  print(
+      f"{'銘柄名':<10} {'取引数':>6} {'勝率':>8} {'総損益(円)':>14} {'PF':>6}"
+  )
+  print("-" * 50)
+  for name, grp in trade_df.groupby("name"):
+    g_win = grp[grp["pnl"] > 0]
+    g_loss = grp[grp["pnl"] <= 0]
+    g_rate = (len(g_win) / len(grp)) * 100
+    g_pnl = grp["pnl"].sum()
+    g_pf = (
+        (g_win["pnl"].sum() / abs(g_loss["pnl"].sum()))
+        if len(g_loss) > 0 and g_loss["pnl"].sum() != 0
+        else 9.99
     )
-
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-    ax.tick_params(colors="#888888", labelsize=8)
-    for spine in ax.spines.values():
-        spine.set_color("#444444")
-
-    # 【文字化け防止】英字とコードのみでタイトルを構成
-    plt.title(
-        f"STOCK CODE: {code} (5MA / 20MA)", color="#ffffff", fontsize=10, pad=8
+    print(
+        f"{name:<10} {len(grp):>6}回 {g_rate:>7.1f}% {g_pnl:>+14,d}円 {g_pf:>6.2f}"
     )
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=200, facecolor=fig.get_facecolor())
-    plt.close()
+  print("==================================================")
 
-
-# ==========================================
-# 5. メイン処理
-# ==========================================
-def main():
-    now_jst = datetime.now(JST).strftime("%m/%d %H:%M JST")
-    stock_results = []
-    chart_targets = {}
-
-    for symbol, name in UNIVERSE.items():
-        code_clean = symbol.replace(".T", "")
-        try:
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period="6mo")
-        except Exception as e:
-            print(f"取得エラー ({symbol}): {e}")
-            continue
-
-        if df.empty or len(df) < 25:
-            continue
-
-        # タイムゾーンの正規化（不整合エラー防止）
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert(JST).tz_localize(None)
-
-        df["MA5"] = df["Close"].rolling(5).mean()
-        df["MA20"] = df["Close"].rolling(20).mean()
-
-        res = evaluate_stock(df, code_clean)
-        c_price = float(df.iloc[-1]["Close"])
-        price_str = (
-            f"{c_price:,.1f}円" if c_price < 1000 else f"{int(c_price):,}円"
-        )
-
-        stock_results.append(
-            {
-                "code": code_clean,
-                "name": name,
-                "price": price_str,
-                "raw_price": c_price,
-                "bias": res["bias"],
-                "status": res["status"],
-                "badge": res["badge"],
-                "score": res["score"],
-                "is_holding": res["is_holding"],
-                "pos_type": res["pos_type"],
-                "entry_price": res["entry_price"],
-            }
-        )
-        chart_targets[code_clean] = df
-
-        # 個別銘柄チャート画像の出力 (chart_{code}.png)
-        generate_chart(df, code_clean, f"chart_{code_clean}.png")
-
-    # ソート順：保有銘柄 ＞ 有効シグナル(BUY/SHORT) ＞ スコア順
-    stock_results.sort(
-        key=lambda x: (
-            x["is_holding"],
-            x["badge"] in ["BUY", "SHORT"],
-            x["score"],
-            -x["raw_price"],
-        ),
-        reverse=True,
-    )
-
-    top_stock = stock_results[0] if stock_results else None
-
-    # 共通チャート（chart.png）の更新
-    if top_stock and top_stock["code"] in chart_targets:
-        shutil.copy(f"chart_{top_stock['code']}.png", "chart.png")
-
-    output_data = {
-        "updated_at": now_jst,
-        "top_stock": top_stock,
-        "stocks": stock_results,
-    }
-
-    with open("result.json", "w", encoding="utf-8") as f:
-        json.dump(output_data, f, ensure_ascii=False, indent=2)
-
-    print(f"[{now_jst}] 更新完了: 厳選ユニバースの判定およびチャート出力完了")
-
-
-if __name__ == "__main__":
-    main()
+  # チャート描画
+  plt.figure(figsize=(10, 4.5))
+  plt.plot(
+      trade_df["exit_date"],
+      trade_df["cum_pnl"],
+      marker=".",
+      color="#0a84ff",
+      linewidth=2,
+  )
+  plt.title("【予算150万・ロット可変レバレッジ】過去1年 累積損益推移 (円)")
+  plt.grid(True, linestyle=":", alpha=0.6)
+  plt.ylabel("累積損益 (円)")
+  plt.show()
