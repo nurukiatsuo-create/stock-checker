@@ -140,7 +140,7 @@
       <h1>【相場流】新8銘柄 監視モニター</h1>
       <div class="status-text">基準: スコア60点以上 | 同時保有最大2枠 | 枠厳守配分</div>
     </div>
-    <div id="updateTime" class="status-text">データ取得中...</div>
+    <div id="updateTime" class="status-text">データ通信中...</div>
   </header>
 
   <div class="card">
@@ -190,9 +190,20 @@
   let stockDataMap = {};
   let selectedCode = "8306.T";
 
-  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+  // タイムアウト付き fetch 関数（指定秒数で強制切断）
+  async function fetchWithTimeout(url, timeoutMs = 3200) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      throw err;
+    }
+  }
 
-  // Yahoo Financeのレスポンスを標準配列化
   function parseYahooData(data) {
     try {
       const res = data.chart.result[0];
@@ -216,14 +227,14 @@
     }
   }
 
-  // 3重フォールバックによる確実な株価取得
+  // 3秒タイムアウト付き・多重フォールバック
   async function fetchStock(symbol) {
-    const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
 
-    // ルート1: corsproxy.io (正規構文)
+    // ルート1: allorigins (raw)
     try {
-      const url1 = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-      const res1 = await fetch(url1);
+      const url1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}&_=${Date.now()}`;
+      const res1 = await fetchWithTimeout(url1, 3500);
       if (res1.ok) {
         const d1 = await res1.json();
         const bars = parseYahooData(d1);
@@ -231,10 +242,10 @@
       }
     } catch (e) {}
 
-    // ルート2: codetabs
+    // ルート2: corsproxy.io
     try {
-      const url2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-      const res2 = await fetch(url2);
+      const url2 = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      const res2 = await fetchWithTimeout(url2, 3500);
       if (res2.ok) {
         const d2 = await res2.json();
         const bars = parseYahooData(d2);
@@ -242,17 +253,14 @@
       }
     } catch (e) {}
 
-    // ルート3: allorigins (JSONラッパー展開)
+    // ルート3: codetabs
     try {
-      const url3 = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&timestamp=${Date.now()}`;
-      const res3 = await fetch(url3);
+      const url3 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+      const res3 = await fetchWithTimeout(url3, 3500);
       if (res3.ok) {
-        const wrapper = await res3.json();
-        if (wrapper.contents) {
-          const d3 = JSON.parse(wrapper.contents);
-          const bars = parseYahooData(d3);
-          if (bars) return bars;
-        }
+        const d3 = await res3.json();
+        const bars = parseYahooData(d3);
+        if (bars) return bars;
       }
     } catch (e) {}
 
@@ -381,7 +389,6 @@
       ctx.fillRect(x - stepX * 0.35, top, Math.max(stepX * 0.7, 1.5), Math.max(bot - top, 2));
     });
 
-    // 20MA
     ctx.strokeStyle = "#0a84ff";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -396,7 +403,6 @@
     });
     ctx.stroke();
 
-    // 5MA
     ctx.strokeStyle = "#ff3b30";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -411,7 +417,6 @@
     });
     ctx.stroke();
 
-    // 日付
     ctx.fillStyle = "#8e8e93";
     for (let dIdx = 2; dIdx < count; dIdx += 7) {
       if (sBars[dIdx]) {
@@ -443,6 +448,16 @@
           <td style="font-weight: 600;">${item.num}</td>
           <td style="font-weight: 600;">${item.name}</td>
           <td colspan="5" class="loading-cell">通信中...</td>
+        `;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      if (data.failed) {
+        tr.innerHTML = `
+          <td style="font-weight: 600;">${item.num}</td>
+          <td style="font-weight: 600;">${item.name}</td>
+          <td colspan="5" class="loading-cell" style="color:#ff453a;">取得失敗</td>
         `;
         tbody.appendChild(tr);
         return;
@@ -484,49 +499,47 @@
     const data = stockDataMap[selectedCode];
     const infoEl = document.getElementById("selectedStockInfo");
     
-    if (item && data) {
+    if (item && data && !data.failed) {
       infoEl.textContent = `${item.name} (${item.num}) - 最新: ${Math.floor(data.price).toLocaleString()}円`;
       drawChart(data.bars, data.ma5, data.ma20);
     }
   }
 
+  // 1銘柄ごとの非同期取得処理
+  async function loadSingleStock(item) {
+    const bars = await fetchStock(item.code);
+    if (bars) {
+      const ma5 = calcMA(bars, 5);
+      const ma20 = calcMA(bars, 20);
+      const res = evaluate(bars, ma5, ma20);
+      stockDataMap[item.code] = {
+        bars, ma5, ma20,
+        price: res.price,
+        score: res.score,
+        signal: res.signal,
+        isMono: res.isMono,
+        failed: false
+      };
+    } else {
+      stockDataMap[item.code] = { failed: true };
+    }
+    renderTable();
+    if (item.code === selectedCode) updateChart();
+  }
+
+  // 8銘柄を一斉並列取得
   async function init() {
     renderTable();
 
-    for (const item of UNIVERSE) {
-      const bars = await fetchStock(item.code);
-      if (bars) {
-        const ma5 = calcMA(bars, 5);
-        const ma20 = calcMA(bars, 20);
-        const res = evaluate(bars, ma5, ma20);
-        stockDataMap[item.code] = {
-          bars, ma5, ma20,
-          price: res.price,
-          score: res.score,
-          signal: res.signal,
-          isMono: res.isMono
-        };
-        renderTable();
-        if (item.code === selectedCode) updateChart();
-      } else {
-        // 取得失敗時の表示
-        const tbody = document.getElementById("stockTableBody");
-        const rows = tbody.querySelectorAll("tr");
-        UNIVERSE.forEach((u, idx) => {
-          if (u.code === item.code && !stockDataMap[u.code] && rows[idx]) {
-            rows[idx].children[2].textContent = "取得失敗";
-          }
-        });
-      }
-      await sleep(350); // プロキシのレートリミット対策ウェイト
-    }
+    const promises = UNIVERSE.map(item => loadSingleStock(item));
+    await Promise.allSettled(promises);
 
     const now = new Date();
     document.getElementById("updateTime").textContent = `更新: ${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} JST`;
   }
 
   window.addEventListener("resize", () => {
-    if (stockDataMap[selectedCode]) updateChart();
+    if (stockDataMap[selectedCode] && !stockDataMap[selectedCode].failed) updateChart();
   });
 
   init();
