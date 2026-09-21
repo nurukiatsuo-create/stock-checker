@@ -16,25 +16,31 @@
       font-family: -apple-system, sans-serif;
       padding: 16px; display: flex; justify-content: center;
     }
-    .container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 12px; }
+    .container { width: 100%; max-width: 540px; display: flex; flex-direction: column; gap: 14px; }
     header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-    h1 { font-size: 1.1rem; }
-    .status { font-size: 0.75rem; color: var(--sub); }
-    .card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+    h1 { font-size: 1.15rem; font-weight: 700; }
+    .status { font-size: 0.8rem; color: var(--sub); }
+    .card { background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-    th { color: var(--sub); padding: 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 0.8rem; }
-    td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+    th { color: var(--sub); padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; font-size: 0.8rem; }
+    td { padding: 12px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    tr.row { cursor: pointer; }
+    tr.row:active { background: rgba(255,255,255,0.08); }
+    tr.selected { background: rgba(255, 214, 10, 0.12); }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; display: inline-block; }
     .b-wait { background: #2c2c2e; color: #8e8e93; }
     .b-buy { background: var(--red); color: #fff; }
+    .chart-container { padding: 12px; text-align: center; }
+    .chart-header { display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: bold; margin-bottom: 8px; color: var(--yellow); }
+    #chartImg { width: 100%; height: auto; border-radius: 8px; display: block; }
   </style>
 </head>
 <body>
 
 <div class="container">
   <header>
-    <h1>【相場流】8銘柄シグナル</h1>
-    <div id="utime" class="status">通信中...</div>
+    <h1>【相場流】新8銘柄モニター</h1>
+    <div id="utime" class="status">読込中...</div>
   </header>
 
   <div class="card">
@@ -42,105 +48,85 @@
       <thead>
         <tr>
           <th>銘柄</th>
-          <th style="text-align:right;">現在値</th>
+          <th style="text-align:right;">株価</th>
           <th style="text-align:center;">点数</th>
-          <th style="text-align:center;">判定</th>
+          <th style="text-align:center;">現買判定</th>
           <th style="text-align:right;">目標</th>
         </tr>
       </thead>
-      <tbody id="list">
-        <tr><td colspan="5" style="text-align:center; color:var(--sub); padding:20px;">読込中...</td></tr>
-      </tbody>
+      <tbody id="list"></tbody>
     </table>
+  </div>
+
+  <div class="card chart-container">
+    <div class="chart-header">
+      <span id="chartTitle">銘柄を選択してください</span>
+      <span style="font-size:0.75rem; color:var(--sub); font-weight:normal;">赤:5MA / 青:20MA</span>
+    </div>
+    <img id="chartImg" alt="チャート画像" src="" style="display:none;" />
   </div>
 </div>
 
 <script>
-  const STOCKS = [
-    { c: "8306.T", n: "三菱UFJ", t: 300 },
-    { c: "7182.T", n: "ゆうちょ", t: 400 },
-    { c: "8393.T", n: "宮崎銀行", t: 200 },
-    { c: "8058.T", n: "三菱商事", t: 200 },
-    { c: "6981.T", n: "村田製作", t: 200 },
-    { c: "4502.T", n: "武田薬品", t: 100 },
-    { c: "2768.T", n: "双日",     t: 100 },
-    { c: "6324.T", n: "ハーモ",   t: 100 }
-  ];
+  let dataset = null;
+  let currentCode = "8306.T";
 
-  async function getBars(sym) {
-    const u = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=1mo&interval=1d`;
-    const p = `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
-    try {
-      const res = await fetch(p);
-      const d = await res.json();
-      const q = d.chart.result[0].indicators.quote[0];
-      let b = [];
-      for (let i = 0; i < q.close.length; i++) {
-        if (q.close[i] && q.open[i]) {
-          b.push({ o: q.open[i], c: q.close[i], h: q.high[i], l: q.low[i] });
-        }
-      }
-      return b;
-    } catch(e) { return null; }
+  function selectStock(code) {
+    currentCode = code;
+    const item = dataset.stocks[code];
+    if (!item) return;
+
+    document.querySelectorAll("tr.row").forEach(tr => {
+      tr.classList.toggle("selected", tr.dataset.code === code);
+    });
+
+    document.getElementById("chartTitle").textContent = `${item.name} (${item.num}) - ${item.price.toLocaleString()}円`;
+    const imgEl = document.getElementById("chartImg");
+    imgEl.src = item.chart_png;
+    imgEl.style.display = "block";
   }
 
-  function judge(b) {
-    const len = b.length;
-    if (len < 20) return { p: "--", s: "--", a: "待機" };
+  function render() {
+    const tbody = document.getElementById("list");
+    tbody.innerHTML = "";
 
-    const c = b[len-1], p = b[len-2];
-    const m5 = b.slice(-5).reduce((s,x)=>s+x.c,0)/5;
-    const pm5 = b.slice(-6,-1).reduce((s,x)=>s+x.c,0)/5;
-    const m20 = b.slice(-20).reduce((s,x)=>s+x.c,0)/20;
-    const pm20 = b.slice(-21,-1).reduce((s,x)=>s+x.c,0)/20;
-
-    const isYang = c.c >= c.o;
-    const mid = (c.o + c.c) / 2;
-    const isShita = isYang && (mid > m5) && (c.c > m5) && (p.c <= pm5) && (m5 >= pm5);
-    const isMono = (c.l <= m20 * 1.015) && (c.c > m20) && isYang && (m20 >= pm20);
-
-    let score = 0;
-    let act = "待機";
-
-    if (isShita && (m20 >= pm20) && (c.c >= m20)) {
-      score = isMono ? 80 : 50;
-      const slope = ((m20 - pm20) / pm20) * 100;
-      score += Math.min(Math.max(Math.floor(slope * 20), 0), 20);
-      if (c.h > c.l) score += Math.floor((Math.abs(c.c - c.o) / (c.h - c.l)) * 10);
-      if (Math.abs(((c.c - m20) / m20) * 100) > 8.0) score -= 15;
-
-      if (score >= 60) act = "現買";
-    }
-
-    return {
-      p: Math.floor(c.c).toLocaleString() + "円",
-      s: score > 0 ? score + "点" : "--",
-      a: act
-    };
-  }
-
-  async function run() {
-    const tb = document.getElementById("list");
-    tb.innerHTML = "";
-
-    for (const item of STOCKS) {
-      const b = await getBars(item.c);
-      const res = b ? judge(b) : { p: "失敗", s: "--", a: "待機" };
+    for (const [code, item] of Object.entries(dataset.stocks)) {
       const tr = document.createElement("tr");
+      tr.className = `row ${code === currentCode ? "selected" : ""}`;
+      tr.dataset.code = code;
+      tr.onclick = () => selectStock(code);
+
+      const pStr = item.price.toLocaleString() + "円";
+      const scColor = item.score.includes("点") ? "#ff453a" : "#8e8e93";
+      const bClass = item.signal === "現買" ? "b-buy" : "b-wait";
+
       tr.innerHTML = `
-        <td style="font-weight:bold;">${item.n}</td>
-        <td style="text-align:right; font-weight:bold;">${res.p}</td>
-        <td style="text-align:center; color:${res.s.includes('点')?'#ff453a':'#8e8e93'};">${res.s}</td>
-        <td style="text-align:center;"><span class="badge ${res.a==='現買'?'b-buy':'b-wait'}">${res.a}</span></td>
-        <td style="text-align:right; color:var(--sub);">${item.t}株</td>
+        <td style="font-weight:bold;">${item.name}</td>
+        <td style="text-align:right; font-weight:bold;">${pStr}</td>
+        <td style="text-align:center; color:${scColor}; font-weight:bold;">${item.score}</td>
+        <td style="text-align:center;"><span class="badge ${bClass}">${item.signal}</span></td>
+        <td style="text-align:right; color:var(--sub);">${item.target}株</td>
       `;
-      tb.appendChild(tr);
+      tbody.appendChild(tr);
     }
-    const d = new Date();
-    document.getElementById("utime").textContent = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}更新`;
+
+    selectStock(currentCode);
   }
 
-  run();
+  async function init() {
+    try {
+      const res = await fetch(`stock_data.json?_=${Date.now()}`);
+      if (!res.ok) throw new Error();
+      dataset = await res.json();
+      document.getElementById("utime").textContent = `更新: ${dataset.updated_at}`;
+      render();
+    } catch(e) {
+      document.getElementById("utime").textContent = "データ未生成 (Actions初回実行待ち)";
+      document.getElementById("list").innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--sub);">Actionsタブから「Run workflow」を実行してください</td></tr>`;
+    }
+  }
+
+  init();
 </script>
 
 </body>
