@@ -3,260 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>【相場流】新8銘柄 監視ダッシュボード</title>
+  <title>【相場流】新8銘柄モニター</title>
   <style>
     :root {
-      --bg-color: #121214;
-      --card-bg: #1c1c1e;
-      --border-color: #2c2c2e;
-      --text-main: #f2f2f7;
-      --text-sub: #8e8e93;
-      --accent-yellow: #ffd60a;
-      --buy-red: #ff453a;
-      --short-blue: #0a84ff;
-      --ma5-red: #ff3b30;
-      --ma20-blue: #0a84ff;
+      --bg: #121214; --card: #1c1c1e; --border: #2c2c2e;
+      --text: #f2f2f7; --sub: #8e8e93; --yellow: #ffd60a;
+      --red: #ff453a;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, sans-serif;
+      padding: 16px; display: flex; justify-content: center;
     }
-    .container { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
-    header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-    h1 { font-size: 1.25rem; font-weight: 700; }
-    .status-text { font-size: 0.8rem; color: var(--text-sub); }
-    .card { background-color: var(--card-bg); border-radius: 12px; padding: 16px; border: 1px solid var(--border-color); }
-    .table-container { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
-    th { color: var(--text-sub); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
-    td { padding: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
-    tr.clickable-row { cursor: pointer; transition: background 0.15s; }
-    tr.clickable-row:hover { background-color: rgba(255, 255, 255, 0.05); }
-    tr.selected-row { background-color: rgba(255, 214, 10, 0.12); }
-    .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; text-align: center; }
-    .badge-wait { background-color: #2c2c2e; color: #aeaeb2; }
-    .badge-buy { background-color: var(--buy-red); color: #fff; }
-    .badge-short { background-color: var(--short-blue); color: #fff; }
-    .score-high { color: var(--buy-red); font-weight: 700; }
-    .score-mid { color: var(--accent-yellow); font-weight: 600; }
-    .score-none { color: var(--text-sub); }
-    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .chart-title { font-size: 1.05rem; font-weight: 700; color: var(--accent-yellow); }
-    .legend { display: flex; gap: 12px; font-size: 0.75rem; }
-    .legend-item { display: flex; align-items: center; gap: 4px; }
-    .dot-ma5 { width: 10px; height: 10px; background: var(--ma5-red); border-radius: 2px; }
-    .dot-ma20 { width: 10px; height: 10px; background: var(--ma20-blue); border-radius: 2px; }
-    #chartCanvas { width: 100%; height: 280px; display: block; }
+    .container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 12px; }
+    header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h1 { font-size: 1.1rem; }
+    .status { font-size: 0.75rem; color: var(--sub); }
+    .card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th { color: var(--sub); padding: 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 0.8rem; }
+    td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+    .b-wait { background: #2c2c2e; color: #8e8e93; }
+    .b-buy { background: var(--red); color: #fff; }
   </style>
 </head>
 <body>
 
 <div class="container">
   <header>
-    <div>
-      <h1>【相場流】新8銘柄 監視モニター</h1>
-      <div class="status-text">基準: スコア60点以上 | 同時保有最大2枠 | 枠厳守配分</div>
-    </div>
-    <div id="updateTime" class="status-text">読込中...</div>
+    <h1>【相場流】8銘柄シグナル</h1>
+    <div id="utime" class="status">通信中...</div>
   </header>
 
   <div class="card">
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>コード</th>
-            <th>銘柄名</th>
-            <th style="text-align: right;">株価</th>
-            <th style="text-align: center;">スコア</th>
-            <th style="text-align: center;">現物シグナル</th>
-            <th style="text-align: center;">信用シグナル</th>
-            <th style="text-align: right;">目標株数</th>
-          </tr>
-        </thead>
-        <tbody id="stockTableBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="chart-header">
-      <div id="selectedStockInfo" class="chart-title">銘柄を選択してください</div>
-      <div class="legend">
-        <div class="legend-item"><div class="dot-ma5"></div> 5MA (赤)</div>
-        <div class="legend-item"><div class="dot-ma20"></div> 20MA (青)</div>
-      </div>
-    </div>
-    <canvas id="chartCanvas"></canvas>
+    <table>
+      <thead>
+        <tr>
+          <th>銘柄</th>
+          <th style="text-align:right;">現在値</th>
+          <th style="text-align:center;">点数</th>
+          <th style="text-align:center;">判定</th>
+          <th style="text-align:right;">目標</th>
+        </tr>
+      </thead>
+      <tbody id="list">
+        <tr><td colspan="5" style="text-align:center; color:var(--sub); padding:20px;">読込中...</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
 <script>
-  let dataset = null;
-  let selectedCode = "8306.T";
+  const STOCKS = [
+    { c: "8306.T", n: "三菱UFJ", t: 300 },
+    { c: "7182.T", n: "ゆうちょ", t: 400 },
+    { c: "8393.T", n: "宮崎銀行", t: 200 },
+    { c: "8058.T", n: "三菱商事", t: 200 },
+    { c: "6981.T", n: "村田製作", t: 200 },
+    { c: "4502.T", n: "武田薬品", t: 100 },
+    { c: "2768.T", n: "双日",     t: 100 },
+    { c: "6324.T", n: "ハーモ",   t: 100 }
+  ];
 
-  function drawChart(bars) {
-    const canvas = document.getElementById("chartCanvas");
-    const ctx = canvas.getContext("2d");
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-
-    const width = rect.width, height = rect.height;
-    ctx.clearRect(0, 0, width, height);
-
-    const count = bars.length;
-    let minP = Infinity, maxP = -Infinity;
-    bars.forEach(b => {
-      if (b.low < minP) minP = b.low;
-      if (b.high > maxP) maxP = b.high;
-      if (b.ma20 && b.ma20 < minP) minP = b.ma20;
-      if (b.ma20 && b.ma20 > maxP) maxP = b.ma20;
-    });
-
-    const padY = (maxP - minP) * 0.08;
-    minP -= padY; maxP += padY;
-    const pRange = maxP - minP;
-
-    const chartLeft = 48;
-    const chartWidth = width - chartLeft;
-    const getY = (p) => height - 24 - ((p - minP) / pRange) * (height - 36);
-    const stepX = chartWidth / count;
-
-    ctx.font = "10px sans-serif";
-    ctx.fillStyle = "#8e8e93";
-    for (let g = 0; g <= 3; g++) {
-      const p = minP + (pRange / 3) * g;
-      const y = getY(p);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(chartLeft, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-      ctx.fillText(Math.round(p).toLocaleString(), 4, y + 3);
-    }
-
-    bars.forEach((b, idx) => {
-      const x = chartLeft + idx * stepX + stepX / 2;
-      const isYang = b.close >= b.open;
-      const color = isYang ? "#ff453a" : "#0a84ff";
-
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(x, getY(b.high));
-      ctx.lineTo(x, getY(b.low));
-      ctx.stroke();
-
-      const top = getY(Math.max(b.open, b.close));
-      const bot = getY(Math.min(b.open, b.close));
-      ctx.fillStyle = color;
-      ctx.fillRect(x - stepX * 0.35, top, Math.max(stepX * 0.7, 1.5), Math.max(bot - top, 2));
-    });
-
-    // 20MA
-    ctx.strokeStyle = "#0a84ff";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    let s20 = false;
-    bars.forEach((b, idx) => {
-      if (b.ma20) {
-        const x = chartLeft + idx * stepX + stepX / 2;
-        const y = getY(b.ma20);
-        if (!s20) { ctx.moveTo(x, y); s20 = true; } else ctx.lineTo(x, y);
-      }
-    });
-    ctx.stroke();
-
-    // 5MA
-    ctx.strokeStyle = "#ff3b30";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    let s5 = false;
-    bars.forEach((b, idx) => {
-      if (b.ma5) {
-        const x = chartLeft + idx * stepX + stepX / 2;
-        const y = getY(b.ma5);
-        if (!s5) { ctx.moveTo(x, y); s5 = true; } else ctx.lineTo(x, y);
-      }
-    });
-    ctx.stroke();
-
-    for (let dIdx = 2; dIdx < count; dIdx += 7) {
-      if (bars[dIdx]) {
-        const x = chartLeft + dIdx * stepX - 10;
-        ctx.fillText(bars[dIdx].date, x, height - 6);
-      }
-    }
-  }
-
-  function renderTable() {
-    const tbody = document.getElementById("stockTableBody");
-    tbody.innerHTML = "";
-    if (!dataset) return;
-
-    for (const [code, item] of Object.entries(dataset.stocks)) {
-      const tr = document.createElement("tr");
-      tr.className = `clickable-row ${code === selectedCode ? "selected-row" : ""}`;
-      tr.onclick = () => {
-        selectedCode = code;
-        renderTable();
-        updateChart();
-      };
-
-      const pStr = Math.floor(item.price).toLocaleString() + " 円";
-      let scoreHtml = `<span class="score-none">--</span>`;
-      if (item.score >= 70) scoreHtml = `<span class="score-high">${item.score}点</span>`;
-      else if (item.score >= 50) scoreHtml = `<span class="score-mid">${item.score}点</span>`;
-
-      const genHtml = item.signal === "BUY" ? `<span class="badge badge-buy">現買</span>` : `<span class="badge badge-wait">待機</span>`;
-      const shinHtml = item.signal === "SHORT" ? `<span class="badge badge-short">空売</span>` : `<span class="badge badge-wait">待機</span>`;
-
-      tr.innerHTML = `
-        <td style="font-weight: 600;">${item.num}</td>
-        <td style="font-weight: 600; color: ${code === selectedCode ? 'var(--accent-yellow)' : 'var(--text-main)'};">${item.name}</td>
-        <td style="text-align: right; font-weight: 700;">${pStr}</td>
-        <td style="text-align: center;">${scoreHtml}</td>
-        <td style="text-align: center;">${genHtml}</td>
-        <td style="text-align: center;">${shinHtml}</td>
-        <td style="text-align: right; color: var(--text-sub);">${item.target}株</td>
-      `;
-      tbody.appendChild(tr);
-    }
-  }
-
-  function updateChart() {
-    if (!dataset || !dataset.stocks[selectedCode]) return;
-    const item = dataset.stocks[selectedCode];
-    document.getElementById("selectedStockInfo").textContent = `${item.name} (${item.num}) - 最新: ${Math.floor(item.price).toLocaleString()}円`;
-    drawChart(item.bars);
-  }
-
-  async function init() {
+  async function getBars(sym) {
+    const u = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=1mo&interval=1d`;
+    const p = `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
     try {
-      // 同一リポジトリ内の静的JSONをフェッチ (CORS制約なし)
-      const res = await fetch(`stock_data.json?_=${Date.now()}`);
-      if (!res.ok) throw new Error("JSON読み込み失敗");
-      dataset = await res.json();
-      document.getElementById("updateTime").textContent = `更新: ${dataset.updated_at}`;
-      renderTable();
-      updateChart();
-    } catch (e) {
-      document.getElementById("updateTime").textContent = "データ未生成 (初回実行待ち)";
-    }
+      const res = await fetch(p);
+      const d = await res.json();
+      const q = d.chart.result[0].indicators.quote[0];
+      let b = [];
+      for (let i = 0; i < q.close.length; i++) {
+        if (q.close[i] && q.open[i]) {
+          b.push({ o: q.open[i], c: q.close[i], h: q.high[i], l: q.low[i] });
+        }
+      }
+      return b;
+    } catch(e) { return null; }
   }
 
-  window.addEventListener("resize", () => { if (dataset) updateChart(); });
-  init();
+  function judge(b) {
+    const len = b.length;
+    if (len < 20) return { p: "--", s: "--", a: "待機" };
+
+    const c = b[len-1], p = b[len-2];
+    const m5 = b.slice(-5).reduce((s,x)=>s+x.c,0)/5;
+    const pm5 = b.slice(-6,-1).reduce((s,x)=>s+x.c,0)/5;
+    const m20 = b.slice(-20).reduce((s,x)=>s+x.c,0)/20;
+    const pm20 = b.slice(-21,-1).reduce((s,x)=>s+x.c,0)/20;
+
+    const isYang = c.c >= c.o;
+    const mid = (c.o + c.c) / 2;
+    const isShita = isYang && (mid > m5) && (c.c > m5) && (p.c <= pm5) && (m5 >= pm5);
+    const isMono = (c.l <= m20 * 1.015) && (c.c > m20) && isYang && (m20 >= pm20);
+
+    let score = 0;
+    let act = "待機";
+
+    if (isShita && (m20 >= pm20) && (c.c >= m20)) {
+      score = isMono ? 80 : 50;
+      const slope = ((m20 - pm20) / pm20) * 100;
+      score += Math.min(Math.max(Math.floor(slope * 20), 0), 20);
+      if (c.h > c.l) score += Math.floor((Math.abs(c.c - c.o) / (c.h - c.l)) * 10);
+      if (Math.abs(((c.c - m20) / m20) * 100) > 8.0) score -= 15;
+
+      if (score >= 60) act = "現買";
+    }
+
+    return {
+      p: Math.floor(c.c).toLocaleString() + "円",
+      s: score > 0 ? score + "点" : "--",
+      a: act
+    };
+  }
+
+  async function run() {
+    const tb = document.getElementById("list");
+    tb.innerHTML = "";
+
+    for (const item of STOCKS) {
+      const b = await getBars(item.c);
+      const res = b ? judge(b) : { p: "失敗", s: "--", a: "待機" };
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="font-weight:bold;">${item.n}</td>
+        <td style="text-align:right; font-weight:bold;">${res.p}</td>
+        <td style="text-align:center; color:${res.s.includes('点')?'#ff453a':'#8e8e93'};">${res.s}</td>
+        <td style="text-align:center;"><span class="badge ${res.a==='現買'?'b-buy':'b-wait'}">${res.a}</span></td>
+        <td style="text-align:right; color:var(--sub);">${item.t}株</td>
+      `;
+      tb.appendChild(tr);
+    }
+    const d = new Date();
+    document.getElementById("utime").textContent = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}更新`;
+  }
+
+  run();
 </script>
 
 </body>
