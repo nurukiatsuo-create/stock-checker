@@ -2,9 +2,10 @@ name: Daily Stock Signal Update
 
 on:
   schedule:
-    # 祝日を除く月〜金の 15:35 JST (UTC 06:35) に自動実行
-    - cron: '35 6 * * 1-5'
+    # 祝日を除く月〜金の 16:00 JST (UTC 07:00) に自動実行
+    - cron: '0 7 * * 1-5'
   workflow_dispatch: # 手動実行ボタン
+
 
 permissions:
   contents: write
